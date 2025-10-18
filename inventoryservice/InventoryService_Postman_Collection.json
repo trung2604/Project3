@@ -1,0 +1,384 @@
+{
+  "info": {
+    "name": "Inventory Service API Tests",
+    "description": "Complete API tests for Inventory Service with Event Sourcing",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Ingredient Management",
+      "item": [
+        {
+          "name": "Create Ingredient",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Tomato\",\n  \"description\": \"Fresh red tomatoes\",\n  \"unit\": \"kg\",\n  \"initialStock\": 50.0,\n  \"minStockLevel\": 10.0,\n  \"maxStockLevel\": 100.0,\n  \"expiryDate\": \"2024-12-31\",\n  \"supplierName\": \"Fresh Farm Co.\",\n  \"supplierContact\": \"+84 123 456 789\",\n  \"unitCost\": 15000.0,\n  \"currency\": \"VND\",\n  \"category\": \"Vegetables\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/ingredient",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "ingredient"]
+            }
+          }
+        },
+        {
+          "name": "Get All Ingredients",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/ingredient?page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "ingredient"],
+              "query": [
+                {"key": "page", "value": "0"},
+                {"key": "size", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Ingredient by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/ingredient/{{ingredientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "ingredient", "{{ingredientId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Ingredient",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Fresh Tomato\",\n  \"description\": \"Premium fresh red tomatoes\",\n  \"unit\": \"kg\",\n  \"minStockLevel\": 15.0,\n  \"maxStockLevel\": 120.0,\n  \"expiryDate\": \"2024-12-31\",\n  \"supplierName\": \"Premium Farm Co.\",\n  \"supplierContact\": \"+84 987 654 321\",\n  \"unitCost\": 18000.0,\n  \"currency\": \"VND\",\n  \"category\": \"Premium Vegetables\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/ingredient/{{ingredientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "ingredient", "{{ingredientId}}"]
+            }
+          }
+        },
+        {
+          "name": "Toggle Ingredient Active",
+          "request": {
+            "method": "PUT",
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/ingredient/{{ingredientId}}/toggle",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "ingredient", "{{ingredientId}}", "toggle"]
+            }
+          }
+        },
+        {
+          "name": "Delete Ingredient",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/ingredient/{{ingredientId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "ingredient", "{{ingredientId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Stock Operations",
+      "item": [
+        {
+          "name": "Stock In",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 25.0,\n  \"unit\": \"kg\",\n  \"unitCost\": 16000.0,\n  \"reference\": \"INV-2024-001\",\n  \"notes\": \"Fresh delivery from supplier\",\n  \"createdBy\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/ingredient/{{ingredientId}}/stock-in",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "ingredient", "{{ingredientId}}", "stock-in"]
+            }
+          }
+        },
+        {
+          "name": "Stock Out",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"quantity\": 5.0,\n  \"unit\": \"kg\",\n  \"reference\": \"ORDER-2024-001\",\n  \"reason\": \"Kitchen usage\",\n  \"notes\": \"Used for cooking\",\n  \"createdBy\": \"chef\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/ingredient/{{ingredientId}}/stock-out",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "ingredient", "{{ingredientId}}", "stock-out"]
+            }
+          }
+        },
+        {
+          "name": "Adjust Stock",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"adjustmentQuantity\": -2.0,\n  \"unit\": \"kg\",\n  \"reason\": \"Damaged goods\",\n  \"notes\": \"Some tomatoes were damaged during storage\",\n  \"createdBy\": \"manager\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/ingredient/{{ingredientId}}/adjust",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "ingredient", "{{ingredientId}}", "adjust"]
+            }
+          }
+        },
+        {
+          "name": "Stock Take",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actualQuantity\": 48.0,\n  \"unit\": \"kg\",\n  \"notes\": \"Monthly stock count\",\n  \"createdBy\": \"inventory_manager\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/ingredient/{{ingredientId}}/stock-take",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "ingredient", "{{ingredientId}}", "stock-take"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Stock Transactions",
+      "item": [
+        {
+          "name": "Get All Transactions",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/transactions?page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "transactions"],
+              "query": [
+                {"key": "page", "value": "0"},
+                {"key": "size", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Transactions by Ingredient",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/transactions/ingredient/{{ingredientId}}?page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "transactions", "ingredient", "{{ingredientId}}"],
+              "query": [
+                {"key": "page", "value": "0"},
+                {"key": "size", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Stock In Transactions",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/transactions/type/STOCK_IN?page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "transactions", "type", "STOCK_IN"],
+              "query": [
+                {"key": "page", "value": "0"},
+                {"key": "size", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Stock Out Transactions",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/transactions/type/STOCK_OUT?page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "transactions", "type", "STOCK_OUT"],
+              "query": [
+                {"key": "page", "value": "0"},
+                {"key": "size", "value": "10"}
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Stock Alerts",
+      "item": [
+        {
+          "name": "Get All Alerts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/alerts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "alerts"]
+            }
+          }
+        },
+        {
+          "name": "Get Active Alerts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/alerts/active",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "alerts", "active"]
+            }
+          }
+        },
+        {
+          "name": "Get Low Stock Alerts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/alerts/low-stock",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "alerts", "low-stock"]
+            }
+          }
+        },
+        {
+          "name": "Get Expiry Alerts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/alerts/expiry",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "alerts", "expiry"]
+            }
+          }
+        },
+        {
+          "name": "Get Critical Alerts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/alerts/critical",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "alerts", "critical"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Advanced Queries",
+      "item": [
+        {
+          "name": "Get Low Stock Ingredients",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/ingredient/low-stock?page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "ingredient", "low-stock"],
+              "query": [
+                {"key": "page", "value": "0"},
+                {"key": "size", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Ingredients by Category",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/ingredient/category/Vegetables?page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "ingredient", "category", "Vegetables"],
+              "query": [
+                {"key": "page", "value": "0"},
+                {"key": "size", "value": "10"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Ingredients with Filters",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/inventory/ingredient?category=Vegetables&active=true&minStock=5.0&maxStock=50.0&page=0&size=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "inventory", "ingredient"],
+              "query": [
+                {"key": "category", "value": "Vegetables"},
+                {"key": "active", "value": "true"},
+                {"key": "minStock", "value": "5.0"},
+                {"key": "maxStock", "value": "50.0"},
+                {"key": "page", "value": "0"},
+                {"key": "size", "value": "10"}
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8003",
+      "type": "string"
+    },
+    {
+      "key": "ingredientId",
+      "value": "ingredient-12345678",
+      "type": "string"
+    }
+  ]
+}

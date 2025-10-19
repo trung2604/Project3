@@ -26,7 +26,7 @@ public class MenuItem {
     private Double price;
     private Boolean active;
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.LAZY)
     private List<String> ingredients = new ArrayList<>();
 }
 

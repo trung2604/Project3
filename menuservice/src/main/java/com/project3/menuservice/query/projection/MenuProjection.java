@@ -12,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,56 +24,41 @@ public class MenuProjection {
     private MenuItemRepository menuItemRepository;
 
     @QueryHandler
+    @Transactional(readOnly = true)
     public PagedMenuItemResponse getAll(GetAllMenuItemsQuery query) {
         int page = query.getPage() != null ? query.getPage() : 0;
         int size = query.getSize() != null ? query.getSize() : 20;
-        
+
         Pageable pageable = PageRequest.of(page, size);
         Page<MenuItem> menuItemPage = menuItemRepository.findByFilters(
-            query.getCategoryId(),
-            query.getActive(),
-            query.getMinPrice(),
-            query.getMaxPrice(),
-            pageable
+                query.getCategoryId(),
+                query.getActive(),
+                query.getMinPrice(),
+                query.getMaxPrice(),
+                pageable
         );
-        
+
         List<MenuItemResponse> result = new ArrayList<>();
-        menuItemPage.getContent().forEach(item -> {
-            MenuItemResponse dto = new MenuItemResponse();
-            dto.setMenuItemId(item.getMenuItemId());
-            dto.setName(item.getName());
-            dto.setCategoryId(item.getCategory() != null ? item.getCategory().getCategoryId() : null);
-            dto.setCategoryName(item.getCategory() != null ? item.getCategory().getName() : null);
-            dto.setDescription(item.getDescription());
-            dto.setPrice(item.getPrice());
-            dto.setActive(item.getActive());
-            dto.setIngredients(item.getIngredients());
-            result.add(dto);
-        });
-        
+        for (MenuItem item : menuItemPage.getContent()) {
+            // Load ingredients separately to avoid serialization issues
+            MenuItem fullItem = menuItemRepository.findWithDetailsById(item.getMenuItemId()).orElse(item);
+            result.add(MenuItemResponse.fromEntity(fullItem));
+        }
+
         return new PagedMenuItemResponse(
-            result,
-            menuItemPage.getNumber(),
-            menuItemPage.getSize(),
-            menuItemPage.getTotalElements(),
-            menuItemPage.getTotalPages()
+                result,
+                menuItemPage.getNumber(),
+                menuItemPage.getSize(),
+                menuItemPage.getTotalElements(),
+                menuItemPage.getTotalPages()
         );
     }
 
     @QueryHandler
+    @Transactional(readOnly = true)
     public MenuItemResponse getById(GetMenuItemByIdQuery query) {
-        MenuItem item = menuItemRepository.findById(query.getMenuItemId()).orElseThrow(() -> new RuntimeException("Menu item not found"));
-        MenuItemResponse dto = new MenuItemResponse();
-        dto.setMenuItemId(item.getMenuItemId());
-        dto.setName(item.getName());
-        dto.setCategoryId(item.getCategory() != null ? item.getCategory().getCategoryId() : null);
-        dto.setCategoryName(item.getCategory() != null ? item.getCategory().getName() : null);
-        dto.setDescription(item.getDescription());
-        dto.setPrice(item.getPrice());
-        dto.setActive(item.getActive());
-        dto.setIngredients(item.getIngredients());
-        return dto;
+        MenuItem item = menuItemRepository.findWithDetailsById(query.getMenuItemId())
+                .orElseThrow(() -> new RuntimeException("Menu item not found"));
+        return MenuItemResponse.fromEntity(item);
     }
 }
-
-

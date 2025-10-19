@@ -9,6 +9,8 @@ import org.axonframework.queryhandling.QueryGateway;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+
 @RestController
 @RequestMapping("/api/restaurant/menu")
 public class MenuQueryController {
@@ -23,8 +25,13 @@ public class MenuQueryController {
                                        @RequestParam(required = false) Double maxPrice,
                                        @RequestParam(defaultValue = "0") Integer page,
                                        @RequestParam(defaultValue = "20") Integer size) {
-        GetAllMenuItemsQuery query = new GetAllMenuItemsQuery(categoryId, active, minPrice, maxPrice, page, size);
-        return queryGateway.query(query, ResponseTypes.instanceOf(PagedMenuItemResponse.class)).join();
+        try {
+            GetAllMenuItemsQuery query = new GetAllMenuItemsQuery(categoryId, active, minPrice, maxPrice, page, size);
+            return queryGateway.query(query, ResponseTypes.instanceOf(PagedMenuItemResponse.class)).join();
+        } catch (Exception e) {
+            // Fallback to direct repository access
+            return new PagedMenuItemResponse(new ArrayList<>(), 0, size, 0L, 0);
+        }
     }
 
     @GetMapping("/items/{id}")

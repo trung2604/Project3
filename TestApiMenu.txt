@@ -1,0 +1,313 @@
+## 🚀 **POSTMAN COLLECTION CHO MENU SERVICE**
+
+### **Base URL:** `http://localhost:8002`
+
+### **1. CATEGORY APIs**
+
+#### **1.1 Tạo Category**
+```http
+POST {{baseUrl}}/api/restaurant/category
+Content-Type: application/json
+
+{
+  "categoryId": "cat-food-001",
+  "name": "Món Chính",
+  "description": "Các món ăn chính",
+  "type": "Food",
+  "active": true
+}
+```
+
+#### **1.2 Cập nhật Category**
+```http
+PUT {{baseUrl}}/api/restaurant/category/cat-food-001
+Content-Type: application/json
+
+{
+  "name": "Món Chính Đặc Biệt",
+  "description": "Các món ăn chính đặc biệt",
+  "type": "Food"
+}
+```
+
+#### **1.3 Bật/tắt Category**
+```http
+PATCH {{baseUrl}}/api/restaurant/category/cat-food-001/active?active=false
+```
+
+#### **1.4 Xóa Category**
+```http
+DELETE {{baseUrl}}/api/restaurant/category/cat-food-001
+```
+
+#### **1.5 Lấy tất cả Categories**
+```http
+GET {{baseUrl}}/api/restaurant/category
+```
+
+#### **1.6 Lấy Category theo ID**
+```http
+GET {{baseUrl}}/api/restaurant/category/cat-food-001
+```
+
+#### **1.7 Lấy Categories theo loại**
+```http
+GET {{baseUrl}}/api/restaurant/category/type/Food
+```
+
+### **2. MENU ITEM APIs**
+
+#### **2.1 Tạo Menu Item**
+```http
+POST {{baseUrl}}/api/restaurant/menu/items
+Content-Type: application/json
+
+{
+  "menuItemId": "item-pho-001",
+  "name": "Phở Bò",
+  "categoryId": "cat-food-001",
+  "description": "Phở bò truyền thống",
+  "price": 45000.0,
+  "active": true,
+  "ingredients": ["bánh phở", "thịt bò", "hành tây", "rau thơm"]
+}
+```
+
+#### **2.2 Cập nhật Menu Item**
+```http
+PUT {{baseUrl}}/api/restaurant/menu/items/item-pho-001
+Content-Type: application/json
+
+{
+  "name": "Phở Bò Đặc Biệt",
+  "categoryId": "cat-food-001",
+  "description": "Phở bò đặc biệt với thịt bò tái",
+  "price": 55000.0,
+  "ingredients": ["bánh phở", "thịt bò tái", "hành tây", "rau thơm", "chả cá"]
+}
+```
+
+#### **2.3 Bật/tắt Menu Item**
+```http
+PATCH {{baseUrl}}/api/restaurant/menu/items/item-pho-001/active?active=false
+```
+
+#### **2.4 Gắn nguyên liệu cho Menu Item**
+```http
+PATCH {{baseUrl}}/api/restaurant/menu/items/item-pho-001/ingredients
+Content-Type: application/json
+
+["bánh phở", "thịt bò", "hành tây", "rau thơm", "chả cá", "nước dùng"]
+```
+
+#### **2.5 Auto-toggle Menu Item**
+```http
+PATCH {{baseUrl}}/api/restaurant/menu/items/item-pho-001/auto-toggle?reason=INVENTORY_LOW&ingredientId=thịt bò
+```
+
+#### **2.6 Xóa Menu Item**
+```http
+DELETE {{baseUrl}}/api/restaurant/menu/items/item-pho-001
+```
+
+#### **2.7 Lấy tất cả Menu Items (có filter/pagination)**
+```http
+GET {{baseUrl}}/api/restaurant/menu/items?categoryId=cat-food-001&active=true&minPrice=30000&maxPrice=60000&page=0&size=10
+```
+
+#### **2.8 Lấy Menu Item theo ID**
+```http
+GET {{baseUrl}}/api/restaurant/menu/items/item-pho-001
+```
+
+### **3. COMBO APIs**
+
+#### **3.1 Tạo Combo**
+```http
+POST {{baseUrl}}/api/restaurant/combo
+Content-Type: application/json
+
+{
+  "comboId": "combo-set-001",
+  "name": "Combo Phở Set",
+  "description": "Phở + nước uống + tráng miệng",
+  "price": 80000.0,
+  "discount": 10.0,
+  "menuItemIds": ["item-pho-001", "item-tra-001", "item-che-001"],
+  "active": true
+}
+```
+
+#### **3.2 Cập nhật Combo**
+```http
+PUT {{baseUrl}}/api/restaurant/combo/combo-set-001
+Content-Type: application/json
+
+{
+  "name": "Combo Phở Set Đặc Biệt",
+  "description": "Phở đặc biệt + nước uống + tráng miệng",
+  "price": 90000.0,
+  "discount": 15.0,
+  "menuItemIds": ["item-pho-001", "item-tra-001", "item-che-001", "item-banh-001"]
+}
+```
+
+#### **3.3 Bật/tắt Combo**
+```http
+PATCH {{baseUrl}}/api/restaurant/combo/combo-set-001/active?active=false
+```
+
+#### **3.4 Thêm Menu Item vào Combo**
+```http
+POST {{baseUrl}}/api/restaurant/combo/combo-set-001/items/item-banh-001
+```
+
+#### **3.5 Xóa Menu Item khỏi Combo**
+```http
+DELETE {{baseUrl}}/api/restaurant/combo/combo-set-001/items/item-banh-001
+```
+
+#### **3.6 Xóa Combo**
+```http
+DELETE {{baseUrl}}/api/restaurant/combo/combo-set-001
+```
+
+#### **3.7 Lấy tất cả Combos**
+```http
+GET {{baseUrl}}/api/restaurant/combo
+```
+
+#### **3.8 Lấy Combo theo ID**
+```http
+GET {{baseUrl}}/api/restaurant/combo/combo-set-001
+```
+
+#### **3.9 Lấy Combos chứa Menu Item**
+```http
+GET {{baseUrl}}/api/restaurant/combo/menu-item/item-pho-001
+```
+
+### **4. TEST SCENARIOS**
+
+#### **4.1 Test Flow Hoàn Chỉnh**
+1. **Tạo Category** → `POST /api/restaurant/category`
+2. **Tạo Menu Items** → `POST /api/restaurant/menu/items` (nhiều items)
+3. **Tạo Combo** → `POST /api/restaurant/combo`
+4. **Test Query** → `GET /api/restaurant/menu/items` với filters
+5. **Test Auto-toggle** → `PATCH /api/restaurant/menu/items/{id}/auto-toggle`
+
+#### **4.2 Test Data Mẫu**
+
+**Categories:**
+```json
+[
+  {
+    "categoryId": "cat-food-001",
+    "name": "Món Chính",
+    "description": "Các món ăn chính",
+    "type": "Food",
+    "active": true
+  },
+  {
+    "categoryId": "cat-drink-001", 
+    "name": "Nước Uống",
+    "description": "Các loại nước uống",
+    "type": "Drink",
+    "active": true
+  },
+  {
+    "categoryId": "cat-dessert-001",
+    "name": "Tráng Miệng", 
+    "description": "Các món tráng miệng",
+    "type": "Dessert",
+    "active": true
+  }
+]
+```
+
+**Menu Items:**
+```json
+[
+  {
+    "menuItemId": "item-pho-001",
+    "name": "Phở Bò",
+    "categoryId": "cat-food-001",
+    "description": "Phở bò truyền thống",
+    "price": 45000.0,
+    "active": true,
+    "ingredients": ["bánh phở", "thịt bò", "hành tây", "rau thơm"]
+  },
+  {
+    "menuItemId": "item-tra-001",
+    "name": "Trà Đá",
+    "categoryId": "cat-drink-001", 
+    "description": "Trà đá mát lạnh",
+    "price": 10000.0,
+    "active": true,
+    "ingredients": ["trà", "đá", "đường"]
+  },
+  {
+    "menuItemId": "item-che-001",
+    "name": "Chè Đậu Đỏ",
+    "categoryId": "cat-dessert-001",
+    "description": "Chè đậu đỏ ngọt ngào",
+    "price": 15000.0,
+    "active": true,
+    "ingredients": ["đậu đỏ", "đường", "nước cốt dừa"]
+  }
+]
+```
+
+**Combo:**
+```json
+{
+  "comboId": "combo-set-001",
+  "name": "Combo Phở Set",
+  "description": "Phở + nước uống + tráng miệng",
+  "price": 80000.0,
+  "discount": 10.0,
+  "menuItemIds": ["item-pho-001", "item-tra-001", "item-che-001"],
+  "active": true
+}
+```
+
+### **5. POSTMAN ENVIRONMENT VARIABLES**
+```json
+{
+  "baseUrl": "http://localhost:8002",
+  "categoryId": "cat-food-001",
+  "menuItemId": "item-pho-001", 
+  "comboId": "combo-set-001"
+}
+```
+
+### **6. EXPECTED RESPONSES**
+
+**Success Response:**
+```json
+{
+  "status": "SUCCESS",
+  "message": "Command processed successfully",
+  "data": "command-id-or-result"
+}
+```
+
+**Error Response:**
+```json
+{
+  "status": "ERROR",
+  "message": "Error description",
+  "errorCode": "ERROR_CODE",
+  "details": "Additional error details"
+}
+```
+
+**Paged Response:**
+```json
+{
+  "items": [...],
+  "page": 0,
+  "size": 20,
+  "totalElements": 100,
+  "totalPages": 5
+}

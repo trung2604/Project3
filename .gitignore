@@ -59,3 +59,11 @@ build/
 
 # Test files
 TestApiMenu.txt
+
+# Non-public local infrastructure/config
+Kafka/
+Keycloak/
+
+# Local debug/test artifacts
+JSON_PARSE_ERROR_DEBUG.md
+test_ingredient*.json

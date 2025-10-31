@@ -10,7 +10,11 @@ import {
     UserOutlined,
     LogoutOutlined,
     BellOutlined,
-    MenuFoldOutlined
+    MenuFoldOutlined,
+    WarningOutlined,
+    HistoryOutlined,
+    AppstoreOutlined,
+    AppstoreAddOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { RESTAURANT_INFO } from '../../constants.js';
@@ -25,7 +29,11 @@ const AppLayout = ({ children }) => {
     // Get current section from URL or default to overview
     const getCurrentSection = () => {
         const path = location.pathname;
+        if (path.includes('inventory/alerts')) return 'inventory-alerts';
+        if (path.includes('inventory/transactions')) return 'inventory-transactions';
         if (path.includes('inventory')) return 'inventory';
+        if (path.includes('menu/categories')) return 'menu-categories';
+        if (path.includes('menu/combos')) return 'menu-combos';
         if (path.includes('menu')) return 'menu';
         if (path.includes('orders')) return 'orders';
         if (path.includes('staff')) return 'staff';
@@ -38,7 +46,11 @@ const AppLayout = ({ children }) => {
     const sidebarIcons = [
         { icon: <HomeOutlined />, key: 'overview', active: currentSection === 'overview', label: 'Tổng quan' },
         { icon: <InboxOutlined />, key: 'inventory', active: currentSection === 'inventory', label: 'Quản lý kho' },
+        { icon: <WarningOutlined />, key: 'inventory-alerts', active: currentSection === 'inventory-alerts', label: 'Cảnh báo kho' },
+        { icon: <HistoryOutlined />, key: 'inventory-transactions', active: currentSection === 'inventory-transactions', label: 'Lịch sử giao dịch' },
         { icon: <MenuOutlined />, key: 'menu', active: currentSection === 'menu', label: 'Thực đơn' },
+        { icon: <AppstoreOutlined />, key: 'menu-categories', active: currentSection === 'menu-categories', label: 'Danh mục' },
+        { icon: <AppstoreAddOutlined />, key: 'menu-combos', active: currentSection === 'menu-combos', label: 'Combo' },
         { icon: <ShoppingOutlined />, key: 'orders', active: currentSection === 'orders', label: 'Đơn hàng' },
         { icon: <TeamOutlined />, key: 'staff', active: currentSection === 'staff', label: 'Nhân viên' },
         { icon: <SettingOutlined />, key: 'settings', active: currentSection === 'settings', label: 'Cài đặt' },
@@ -54,6 +66,14 @@ const AppLayout = ({ children }) => {
     const handleIconClick = (key) => {
         if (key === 'overview') {
             navigate('/dashboard');
+        } else if (key === 'inventory-alerts') {
+            navigate('/dashboard/inventory/alerts');
+        } else if (key === 'inventory-transactions') {
+            navigate('/dashboard/inventory/transactions');
+        } else if (key === 'menu-categories') {
+            navigate('/dashboard/menu/categories');
+        } else if (key === 'menu-combos') {
+            navigate('/dashboard/menu/combos');
         } else {
             navigate(`/dashboard/${key}`);
         }

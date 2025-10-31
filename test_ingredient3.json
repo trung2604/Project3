@@ -1,0 +1,14 @@
+{
+  "name": "Onion",
+  "description": "Fresh onions",
+  "unit": "kg",
+  "initialStock": 30.0,
+  "minStockLevel": 5.0,
+  "maxStockLevel": 60.0,
+  "expiryDate": "2024-12-31",
+  "supplierName": "Vegetable Farm",
+  "supplierContact": "+84 111 222 333",
+  "unitCost": 12000.0,
+  "currency": "VND",
+  "category": "Vegetables"
+}

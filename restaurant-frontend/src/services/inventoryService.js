@@ -24,10 +24,8 @@ export const inventoryService = {
         return apiClient.delete(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}`);
     },
 
-    toggleIngredientActive: (id, active) => {
-        return apiClient.put(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}/toggle`, null, {
-            params: { active }
-        });
+    toggleIngredientActive: (id) => {
+        return apiClient.put(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}/toggle`);
     },
 
     // Stock Operations

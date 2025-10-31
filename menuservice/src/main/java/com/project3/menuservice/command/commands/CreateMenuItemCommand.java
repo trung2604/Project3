@@ -18,6 +18,10 @@ public class CreateMenuItemCommand {
     private String description;
     private Double price;
     private Boolean active;
+    private String imageUrl;
+    private String imagePublicId;
+    private Integer preparationTime;
+    private String recipe;
     private List<String> ingredients; // list of ingredient IDs or names
 }
 

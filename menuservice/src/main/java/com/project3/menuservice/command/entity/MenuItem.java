@@ -25,6 +25,10 @@ public class MenuItem {
     private String description;
     private Double price;
     private Boolean active;
+    private String imageUrl;
+    private String imagePublicId; // Cloudinary public ID for deletion
+    private Integer preparationTime;
+    private String recipe; // Công thức món ăn
 
     @ElementCollection(fetch = FetchType.LAZY)
     private List<String> ingredients = new ArrayList<>();

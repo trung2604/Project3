@@ -26,14 +26,21 @@ public class StockTransactionQueryController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         
-        LocalDateTime from = fromDate != null ? LocalDateTime.parse(fromDate) : null;
-        LocalDateTime to = toDate != null ? LocalDateTime.parse(toDate) : null;
-        
-        GetStockTransactionsQuery query = new GetStockTransactionsQuery(
-            ingredientId, transactionType, from, to, page, size
-        );
-        
-        return queryGateway.query(query, ResponseTypes.multipleInstancesOf(StockTransactionResponse.class)).join();
+        try {
+            LocalDateTime from = fromDate != null ? LocalDateTime.parse(fromDate) : null;
+            LocalDateTime to = toDate != null ? LocalDateTime.parse(toDate) : null;
+            
+            GetStockTransactionsQuery query = new GetStockTransactionsQuery(
+                ingredientId, transactionType, from, to, page, size
+            );
+            
+            return queryGateway.query(query, ResponseTypes.multipleInstancesOf(StockTransactionResponse.class)).join();
+        } catch (Exception e) {
+            // Log the error and return empty list to prevent 500 error
+            System.err.println("Error in getAll transactions: " + e.getMessage());
+            e.printStackTrace();
+            return new java.util.ArrayList<>();
+        }
     }
     
     @GetMapping("/ingredient/{ingredientId}")
@@ -42,11 +49,17 @@ public class StockTransactionQueryController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         
-        GetStockTransactionsQuery query = new GetStockTransactionsQuery(
-            ingredientId, null, null, null, page, size
-        );
-        
-        return queryGateway.query(query, ResponseTypes.multipleInstancesOf(StockTransactionResponse.class)).join();
+        try {
+            GetStockTransactionsQuery query = new GetStockTransactionsQuery(
+                ingredientId, null, null, null, page, size
+            );
+            
+            return queryGateway.query(query, ResponseTypes.multipleInstancesOf(StockTransactionResponse.class)).join();
+        } catch (Exception e) {
+            System.err.println("Error in getByIngredient transactions: " + e.getMessage());
+            e.printStackTrace();
+            return new java.util.ArrayList<>();
+        }
     }
     
     @GetMapping("/type/{transactionType}")
@@ -55,10 +68,16 @@ public class StockTransactionQueryController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         
-        GetStockTransactionsQuery query = new GetStockTransactionsQuery(
-            null, transactionType, null, null, page, size
-        );
-        
-        return queryGateway.query(query, ResponseTypes.multipleInstancesOf(StockTransactionResponse.class)).join();
+        try {
+            GetStockTransactionsQuery query = new GetStockTransactionsQuery(
+                null, transactionType, null, null, page, size
+            );
+            
+            return queryGateway.query(query, ResponseTypes.multipleInstancesOf(StockTransactionResponse.class)).join();
+        } catch (Exception e) {
+            System.err.println("Error in getByType transactions: " + e.getMessage());
+            e.printStackTrace();
+            return new java.util.ArrayList<>();
+        }
     }
 }

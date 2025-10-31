@@ -26,6 +26,10 @@ export const API_ENDPOINTS = {
         CATEGORIES: '/api/restaurant/category',
         COMBOS: '/api/restaurant/combo'
     },
+    // Cloudinary Service
+    CLOUDINARY: {
+        SIGNATURE: '/api/cloudinary/signature'
+    },
     // Dashboard Service (if exists)
     DASHBOARD: {
         STATS: '/api/dashboard/stats',

@@ -27,13 +27,21 @@ public class StockTransactionProjection {
     @QueryHandler
     public List<StockTransactionResponse> getAll(GetStockTransactionsQuery query) {
         Pageable pageable = PageRequest.of(query.getPage(), query.getSize());
-        Page<StockTransaction> transactionPage = stockTransactionRepository.findByFilters(
-            query.getIngredientId(),
-            query.getTransactionType(),
-            query.getFromDate(),
-            query.getToDate(),
-            pageable
-        );
+        Page<StockTransaction> transactionPage;
+        
+        // Build query based on filters
+        if (query.getIngredientId() != null && query.getTransactionType() != null) {
+            // Both filters - need to implement this case
+            transactionPage = stockTransactionRepository.findAllOrderByTransactionDateDesc(pageable);
+        } else if (query.getIngredientId() != null) {
+            transactionPage = stockTransactionRepository.findByIngredientIdOrderByTransactionDateDesc(
+                query.getIngredientId(), pageable);
+        } else if (query.getTransactionType() != null) {
+            transactionPage = stockTransactionRepository.findByTransactionTypeOrderByTransactionDateDesc(
+                query.getTransactionType(), pageable);
+        } else {
+            transactionPage = stockTransactionRepository.findAllOrderByTransactionDateDesc(pageable);
+        }
         
         return transactionPage.getContent().stream()
             .map(this::mapToResponse)

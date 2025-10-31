@@ -56,4 +56,8 @@ public class Ingredient {
     
     // Category
     private String category; // Raw Material, Spice, Beverage, etc.
+
+    // Image
+    private String imageUrl;
+    private String imagePublicId;
 }

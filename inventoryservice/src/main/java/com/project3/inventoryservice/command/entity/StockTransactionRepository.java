@@ -13,20 +13,14 @@ import java.util.List;
 @Repository
 public interface StockTransactionRepository extends JpaRepository<StockTransaction, String> {
     
-    List<StockTransaction> findByIngredientIdOrderByTransactionDateDesc(String ingredientId);
+    @Query("SELECT st FROM StockTransaction st ORDER BY st.transactionDate DESC")
+    Page<StockTransaction> findAllOrderByTransactionDateDesc(Pageable pageable);
     
-    List<StockTransaction> findByTransactionTypeOrderByTransactionDateDesc(String transactionType);
+    @Query("SELECT st FROM StockTransaction st WHERE st.ingredientId = :ingredientId ORDER BY st.transactionDate DESC")
+    Page<StockTransaction> findByIngredientIdOrderByTransactionDateDesc(@Param("ingredientId") String ingredientId, Pageable pageable);
     
-    @Query("SELECT st FROM StockTransaction st WHERE " +
-           "(:ingredientId IS NULL OR st.ingredientId = :ingredientId) AND " +
-           "(:transactionType IS NULL OR st.transactionType = :transactionType) AND " +
-           "(:fromDate IS NULL OR st.transactionDate >= :fromDate) AND " +
-           "(:toDate IS NULL OR st.transactionDate <= :toDate)")
-    Page<StockTransaction> findByFilters(@Param("ingredientId") String ingredientId,
-                                        @Param("transactionType") String transactionType,
-                                        @Param("fromDate") LocalDateTime fromDate,
-                                        @Param("toDate") LocalDateTime toDate,
-                                        Pageable pageable);
+    @Query("SELECT st FROM StockTransaction st WHERE st.transactionType = :transactionType ORDER BY st.transactionDate DESC")
+    Page<StockTransaction> findByTransactionTypeOrderByTransactionDateDesc(@Param("transactionType") String transactionType, Pageable pageable);
     
     @Query("SELECT st FROM StockTransaction st WHERE st.ingredientId = :ingredientId " +
            "ORDER BY st.transactionDate DESC LIMIT 1")

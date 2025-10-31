@@ -4,8 +4,8 @@ import com.project3.inventoryservice.command.entity.*;
 import org.axonframework.eventhandling.EventHandler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import com.project3.inventoryservice.service.CloudinaryService;
 
-import java.time.LocalDateTime;
 
 @Component
 public class InventoryEventHandler {
@@ -18,6 +18,9 @@ public class InventoryEventHandler {
     
     @Autowired
     private StockAlertRepository stockAlertRepository;
+
+    @Autowired(required = false)
+    private CloudinaryService cloudinaryService;
     
     @EventHandler
     public void on(IngredientCreatedEvent event) {
@@ -37,6 +40,8 @@ public class InventoryEventHandler {
         ingredient.setUnitCost(event.getUnitCost());
         ingredient.setCurrency(event.getCurrency());
         ingredient.setCategory(event.getCategory());
+        ingredient.setImageUrl(event.getImageUrl());
+        ingredient.setImagePublicId(event.getImagePublicId());
         
         ingredientRepository.save(ingredient);
         
@@ -72,6 +77,8 @@ public class InventoryEventHandler {
             ingredient.setUnitCost(event.getUnitCost());
             ingredient.setCurrency(event.getCurrency());
             ingredient.setCategory(event.getCategory());
+        ingredient.setImageUrl(event.getImageUrl());
+        ingredient.setImagePublicId(event.getImagePublicId());
             
             ingredientRepository.save(ingredient);
         }
@@ -81,6 +88,9 @@ public class InventoryEventHandler {
     public void on(IngredientDeletedEvent event) {
         Ingredient ingredient = ingredientRepository.findById(event.getIngredientId()).orElse(null);
         if (ingredient != null) {
+            if (cloudinaryService != null && ingredient.getImagePublicId() != null && !ingredient.getImagePublicId().isEmpty()) {
+                cloudinaryService.deleteImage(ingredient.getImagePublicId());
+            }
             ingredient.setActive(false);
             ingredientRepository.save(ingredient);
         }

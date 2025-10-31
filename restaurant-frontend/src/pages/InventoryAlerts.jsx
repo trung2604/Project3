@@ -7,26 +7,25 @@ import {
     Select,
     Space,
     Tag,
-    Modal,
-    Form,
-    InputNumber,
     App,
     Row,
     Col,
     Statistic,
     Alert,
-    Timeline
+    Badge,
+    Tabs,
+    Empty
 } from 'antd';
 import {
-    SearchOutlined,
-    ReloadOutlined,
     WarningOutlined,
-    ClockCircleOutlined,
     ExclamationCircleOutlined,
-    CheckCircleOutlined
+    ClockCircleOutlined,
+    ReloadOutlined,
+    SearchOutlined,
+    BellOutlined
 } from '@ant-design/icons';
 import { inventoryService } from '../services/inventoryService';
-import { ALERT_TYPES, TRANSACTION_TYPES } from '../constants.js';
+import { PAGINATION } from '../constants.js';
 
 const { Option } = Select;
 const { Search } = Input;
@@ -34,105 +33,128 @@ const { Search } = Input;
 const InventoryAlerts = () => {
     const { message } = App.useApp();
     const [alerts, setAlerts] = useState([]);
+    const [lowStockAlerts, setLowStockAlerts] = useState([]);
+    const [expiryAlerts, setExpiryAlerts] = useState([]);
+    const [criticalAlerts, setCriticalAlerts] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [pagination, setPagination] = useState({
-        current: 1,
-        pageSize: 10,
-        total: 0
-    });
-    const [filters, setFilters] = useState({
-        alertType: '',
-        severity: '',
-        search: ''
-    });
+    const [activeTab, setActiveTab] = useState('all');
 
-    // Load alerts data
-    const loadAlerts = async (page = 1, size = 10) => {
+    // Load all alerts
+    const loadAlerts = async () => {
         setLoading(true);
         try {
-            const params = {
-                page: page - 1,
-                size,
-                ...filters
-            };
-
-            const response = await inventoryService.getAlerts(params);
-            setAlerts(response.data.content || []);
-            setPagination(prev => ({
-                ...prev,
-                current: page,
-                total: response.data.totalElements || 0
-            }));
+            const response = await inventoryService.getAlerts();
+            setAlerts(response.data || []);
         } catch (error) {
-            message.error('Lỗi khi tải dữ liệu cảnh báo');
+            message.error('Lỗi khi tải cảnh báo');
             console.error('Error loading alerts:', error);
         } finally {
             setLoading(false);
         }
     };
 
-    useEffect(() => {
-        loadAlerts();
-    }, [filters]);
-
-    // Handle table changes
-    const handleTableChange = (paginationInfo) => {
-        loadAlerts(paginationInfo.current, paginationInfo.pageSize);
-    };
-
-    // Handle search and filters
-    const handleSearch = (value) => {
-        setFilters(prev => ({ ...prev, search: value }));
-    };
-
-    const handleFilterChange = (key, value) => {
-        setFilters(prev => ({ ...prev, [key]: value }));
-    };
-
-    // Get alert severity color
-    const getSeverityColor = (severity) => {
-        switch (severity) {
-            case 'CRITICAL': return 'red';
-            case 'HIGH': return 'orange';
-            case 'MEDIUM': return 'yellow';
-            case 'LOW': return 'blue';
-            default: return 'default';
+    // Load low stock alerts
+    const loadLowStockAlerts = async () => {
+        try {
+            const response = await inventoryService.getLowStockAlerts();
+            setLowStockAlerts(response.data || []);
+        } catch (error) {
+            console.error('Error loading low stock alerts:', error);
         }
     };
 
-    // Get alert type icon
+    // Load expiry alerts
+    const loadExpiryAlerts = async () => {
+        try {
+            const response = await inventoryService.getExpiryAlerts();
+            setExpiryAlerts(response.data || []);
+        } catch (error) {
+            console.error('Error loading expiry alerts:', error);
+        }
+    };
+
+    // Load critical alerts
+    const loadCriticalAlerts = async () => {
+        try {
+            const response = await inventoryService.getCriticalAlerts();
+            setCriticalAlerts(response.data || []);
+        } catch (error) {
+            console.error('Error loading critical alerts:', error);
+        }
+    };
+
+    // Load low stock ingredients
+    const loadLowStockIngredients = async () => {
+        try {
+            const response = await inventoryService.getLowStockIngredients();
+            // This will be used for the low stock tab
+            return response.data || [];
+        } catch (error) {
+            console.error('Error loading low stock ingredients:', error);
+            return [];
+        }
+    };
+
+    useEffect(() => {
+        loadAlerts();
+        loadLowStockAlerts();
+        loadExpiryAlerts();
+        loadCriticalAlerts();
+    }, []);
+
+    // Get alert type color
+    const getAlertTypeColor = (type) => {
+        switch (type) {
+            case 'LOW_STOCK': return 'orange';
+            case 'EXPIRY': return 'red';
+            case 'CRITICAL': return 'red';
+            case 'OUT_OF_STOCK': return 'red';
+            default: return 'blue';
+        }
+    };
+
+    // Get alert type text
+    const getAlertTypeText = (type) => {
+        switch (type) {
+            case 'LOW_STOCK': return 'Tồn kho thấp';
+            case 'EXPIRY': return 'Sắp hết hạn';
+            case 'CRITICAL': return 'Khẩn cấp';
+            case 'OUT_OF_STOCK': return 'Hết hàng';
+            default: return 'Cảnh báo';
+        }
+    };
+
+    // Get alert icon
     const getAlertIcon = (type) => {
         switch (type) {
             case 'LOW_STOCK': return <WarningOutlined />;
             case 'EXPIRY': return <ClockCircleOutlined />;
             case 'CRITICAL': return <ExclamationCircleOutlined />;
-            default: return <CheckCircleOutlined />;
+            case 'OUT_OF_STOCK': return <ExclamationCircleOutlined />;
+            default: return <BellOutlined />;
         }
     };
 
-    // Table columns
-    const columns = [
+    // Table columns for alerts
+    const alertColumns = [
         {
             title: 'Loại cảnh báo',
             dataIndex: 'alertType',
             key: 'alertType',
             render: (type) => (
-                <Space>
-                    {getAlertIcon(type)}
-                    <span>{type === 'LOW_STOCK' ? 'Tồn kho thấp' :
-                        type === 'EXPIRY' ? 'Hết hạn' :
-                            type === 'CRITICAL' ? 'Khẩn cấp' : type}</span>
-                </Space>
+                <Tag color={getAlertTypeColor(type)} icon={getAlertIcon(type)}>
+                    {getAlertTypeText(type)}
+                </Tag>
             ),
         },
         {
             title: 'Nguyên liệu',
             dataIndex: 'ingredientName',
             key: 'ingredientName',
-            render: (name, record) => (
+            render: (text, record) => (
                 <div>
-                    <div className="font-medium">{name}</div>
-                    <div className="text-sm text-gray-500">{record.ingredientCategory}</div>
+                    <div style={{ fontWeight: '500', fontSize: '14px' }}>{text}</div>
+                    <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{record.ingredientId}</div>
                 </div>
             ),
         },
@@ -142,203 +164,300 @@ const InventoryAlerts = () => {
             key: 'message',
         },
         {
-            title: 'Mức độ',
-            dataIndex: 'severity',
-            key: 'severity',
-            render: (severity) => (
-                <Tag color={getSeverityColor(severity)}>
-                    {severity}
-                </Tag>
+            title: 'Tồn kho hiện tại',
+            dataIndex: 'currentStock',
+            key: 'currentStock',
+            render: (stock, record) => (
+                <div>
+                    <div style={{ fontWeight: '500', fontSize: '14px' }}>{stock} {record.unit}</div>
+                    <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>
+                        Min: {record.minStockLevel} | Max: {record.maxStockLevel}
+                    </div>
+                </div>
             ),
         },
         {
             title: 'Ngày tạo',
             dataIndex: 'createdAt',
             key: 'createdAt',
-            render: (date) => new Date(date).toLocaleDateString('vi-VN'),
+            render: (date) => new Date(date).toLocaleString('vi-VN'),
         },
         {
             title: 'Trạng thái',
-            dataIndex: 'resolved',
-            key: 'resolved',
-            render: (resolved) => (
-                <Tag color={resolved ? 'green' : 'red'}>
-                    {resolved ? 'Đã xử lý' : 'Chưa xử lý'}
+            dataIndex: 'isActive',
+            key: 'isActive',
+            render: (active) => (
+                <Tag color={active ? 'red' : 'green'}>
+                    {active ? 'Đang hoạt động' : 'Đã xử lý'}
                 </Tag>
             ),
         },
     ];
 
-    // Mock statistics
-    const stats = {
-        totalAlerts: 15,
-        criticalAlerts: 3,
-        lowStockAlerts: 8,
-        expiryAlerts: 4,
-        resolvedAlerts: 7
+    // Table columns for low stock ingredients
+    const lowStockColumns = [
+        {
+            title: 'Nguyên liệu',
+            dataIndex: 'name',
+            key: 'name',
+            render: (text, record) => (
+                <div>
+                    <div style={{ fontWeight: '500', fontSize: '14px' }}>{text}</div>
+                    <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{record.description}</div>
+                </div>
+            ),
+        },
+        {
+            title: 'Danh mục',
+            dataIndex: 'category',
+            key: 'category',
+            render: (category) => <Tag color="blue">{category}</Tag>,
+        },
+        {
+            title: 'Tồn kho hiện tại',
+            dataIndex: 'currentStock',
+            key: 'currentStock',
+            render: (stock, record) => (
+                <div>
+                    <div className="font-medium text-red-600">{stock} {record.unit}</div>
+                    <div className="text-sm text-gray-500">
+                        Min: {record.minStockLevel} | Max: {record.maxStockLevel}
+                    </div>
+                </div>
+            ),
+        },
+        {
+            title: 'Mức cảnh báo',
+            key: 'alertLevel',
+            render: (_, record) => {
+                const percentage = (record.currentStock / record.minStockLevel) * 100;
+                if (percentage <= 50) {
+                    return <Tag color="red">Khẩn cấp ({percentage.toFixed(0)}%)</Tag>;
+                } else if (percentage <= 80) {
+                    return <Tag color="orange">Cảnh báo ({percentage.toFixed(0)}%)</Tag>;
+                } else {
+                    return <Tag color="yellow">Sắp hết ({percentage.toFixed(0)}%)</Tag>;
+                }
+            },
+        },
+        {
+            title: 'Nhà cung cấp',
+            dataIndex: 'supplierName',
+            key: 'supplierName',
+            render: (supplier, record) => (
+                <div>
+                    <div className="font-medium">{supplier}</div>
+                    <div className="text-sm text-gray-500">{record.supplierContact}</div>
+                </div>
+            ),
+        },
+    ];
+
+    // Get statistics
+    const getStatistics = () => {
+        const totalAlerts = alerts.length;
+        const activeAlerts = alerts.filter(alert => alert.isActive).length;
+        const lowStockCount = lowStockAlerts.length;
+        const expiryCount = expiryAlerts.length;
+        const criticalCount = criticalAlerts.length;
+
+        return {
+            totalAlerts,
+            activeAlerts,
+            lowStockCount,
+            expiryCount,
+            criticalCount
+        };
     };
 
+    const stats = getStatistics();
+
     return (
-        <div className="page-content">
-            <div className="page-header">
-                <div className="flex justify-between items-center">
-                    <div>
-                        <h1>Cảnh báo tồn kho</h1>
-                        <p>Theo dõi và quản lý các cảnh báo về tồn kho</p>
-                    </div>
-                    <Button
-                        icon={<ReloadOutlined />}
-                        onClick={() => loadAlerts()}
-                    >
-                        Làm mới
-                    </Button>
+        <div className="space-y-6">
+            <div className="flex justify-between items-center">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-800 mb-2">Cảnh báo tồn kho</h1>
+                    <p className="text-gray-600">Theo dõi và quản lý các cảnh báo tồn kho</p>
                 </div>
+                <Button
+                    icon={<ReloadOutlined />}
+                    onClick={() => {
+                        loadAlerts();
+                        loadLowStockAlerts();
+                        loadExpiryAlerts();
+                        loadCriticalAlerts();
+                    }}
+                    className="restaurant-button"
+                >
+                    Làm mới
+                </Button>
             </div>
 
             {/* Statistics Cards */}
-            <div className="page-section">
-                <Row gutter={[16, 16]}>
-                    <Col xs={24} sm={6}>
-                        <Card className="restaurant-card">
-                            <Statistic
-                                title="Tổng cảnh báo"
-                                value={stats.totalAlerts}
-                                prefix={<WarningOutlined />}
-                                valueStyle={{ color: '#1890ff' }}
-                            />
-                        </Card>
-                    </Col>
-                    <Col xs={24} sm={6}>
-                        <Card className="restaurant-card">
-                            <Statistic
-                                title="Khẩn cấp"
-                                value={stats.criticalAlerts}
-                                prefix={<ExclamationCircleOutlined />}
-                                valueStyle={{ color: '#ff4d4f' }}
-                            />
-                        </Card>
-                    </Col>
-                    <Col xs={24} sm={6}>
-                        <Card className="restaurant-card">
-                            <Statistic
-                                title="Tồn kho thấp"
-                                value={stats.lowStockAlerts}
-                                prefix={<WarningOutlined />}
-                                valueStyle={{ color: '#faad14' }}
-                            />
-                        </Card>
-                    </Col>
-                    <Col xs={24} sm={6}>
-                        <Card className="restaurant-card">
-                            <Statistic
-                                title="Hết hạn"
-                                value={stats.expiryAlerts}
-                                prefix={<ClockCircleOutlined />}
-                                valueStyle={{ color: '#722ed1' }}
-                            />
-                        </Card>
-                    </Col>
-                </Row>
-            </div>
-
-            {/* Critical Alerts */}
-            <div className="page-section">
-                <Card title="Cảnh báo khẩn cấp" className="restaurant-card">
-                    <div className="alert-container">
-                        <Alert
-                            message="Cà chua sắp hết hàng"
-                            description="Tồn kho chỉ còn 2kg, cần nhập hàng ngay"
-                            type="error"
-                            showIcon
-                            action={
-                                <Button size="small" danger>
-                                    Xử lý ngay
-                                </Button>
-                            }
+            <Row gutter={[16, 16]}>
+                <Col xs={24} sm={6}>
+                    <Card className="restaurant-card">
+                        <Statistic
+                            title="Tổng cảnh báo"
+                            value={stats.totalAlerts}
+                            prefix={<BellOutlined />}
+                            valueStyle={{ color: '#1890ff' }}
                         />
-                        <Alert
-                            message="Rau xà lách hết hạn"
-                            description="Hết hạn trong 1 ngày, cần kiểm tra và xử lý"
-                            type="warning"
-                            showIcon
-                            action={
-                                <Button size="small" type="primary">
-                                    Kiểm tra
-                                </Button>
-                            }
+                    </Card>
+                </Col>
+                <Col xs={24} sm={6}>
+                    <Card className="restaurant-card">
+                        <Statistic
+                            title="Cảnh báo đang hoạt động"
+                            value={stats.activeAlerts}
+                            prefix={<ExclamationCircleOutlined />}
+                            valueStyle={{ color: '#ff4d4f' }}
                         />
-                    </div>
-                </Card>
-            </div>
+                    </Card>
+                </Col>
+                <Col xs={24} sm={6}>
+                    <Card className="restaurant-card">
+                        <Statistic
+                            title="Tồn kho thấp"
+                            value={stats.lowStockCount}
+                            prefix={<WarningOutlined />}
+                            valueStyle={{ color: '#fa8c16' }}
+                        />
+                    </Card>
+                </Col>
+                <Col xs={24} sm={6}>
+                    <Card className="restaurant-card">
+                        <Statistic
+                            title="Sắp hết hạn"
+                            value={stats.expiryCount}
+                            prefix={<ClockCircleOutlined />}
+                            valueStyle={{ color: '#f5222d' }}
+                        />
+                    </Card>
+                </Col>
+            </Row>
 
-            {/* Filters */}
-            <div className="page-section">
-                <Card className="restaurant-card search-filter-section">
-                    <Row gutter={[16, 16]} align="middle">
-                        <Col xs={24} sm={8}>
-                            <Search
-                                placeholder="Tìm kiếm cảnh báo..."
-                                onSearch={handleSearch}
-                                enterButton={<SearchOutlined />}
-                            />
-                        </Col>
-                        <Col xs={24} sm={6}>
-                            <Select
-                                placeholder="Loại cảnh báo"
-                                style={{ width: '100%' }}
-                                allowClear
-                                onChange={(value) => handleFilterChange('alertType', value)}
-                            >
-                                <Option value="LOW_STOCK">Tồn kho thấp</Option>
-                                <Option value="EXPIRY">Hết hạn</Option>
-                                <Option value="CRITICAL">Khẩn cấp</Option>
-                            </Select>
-                        </Col>
-                        <Col xs={24} sm={6}>
-                            <Select
-                                placeholder="Mức độ"
-                                style={{ width: '100%' }}
-                                allowClear
-                                onChange={(value) => handleFilterChange('severity', value)}
-                            >
-                                <Option value="CRITICAL">Khẩn cấp</Option>
-                                <Option value="HIGH">Cao</Option>
-                                <Option value="MEDIUM">Trung bình</Option>
-                                <Option value="LOW">Thấp</Option>
-                            </Select>
-                        </Col>
-                        <Col xs={24} sm={4}>
-                            <Button
-                                icon={<ReloadOutlined />}
-                                onClick={() => loadAlerts()}
-                                className="w-full"
-                            >
-                                Làm mới
-                            </Button>
-                        </Col>
-                    </Row>
-                </Card>
-            </div>
-
-            {/* Table */}
-            <div className="page-section">
-                <Card className="restaurant-card">
-                    <Table
-                        columns={columns}
-                        dataSource={alerts}
-                        rowKey="id"
-                        loading={loading}
-                        pagination={{
-                            ...pagination,
-                            showSizeChanger: true,
-                            showQuickJumper: true,
-                            showTotal: (total, range) =>
-                                `${range[0]}-${range[1]} của ${total} mục`,
-                        }}
-                        onChange={handleTableChange}
-                    />
-                </Card>
-            </div>
+            {/* Alerts Tabs */}
+            <Card className="restaurant-card">
+                <Tabs
+                    activeKey={activeTab}
+                    onChange={setActiveTab}
+                    items={[
+                        {
+                            key: 'all',
+                            label: (
+                                <span>
+                                    <BellOutlined />
+                                    Tất cả cảnh báo
+                                    {stats.totalAlerts > 0 && (
+                                        <Badge count={stats.totalAlerts} style={{ marginLeft: 8 }} />
+                                    )}
+                                </span>
+                            ),
+                            children: (
+                                <Table
+                                    columns={alertColumns}
+                                    dataSource={alerts}
+                                    rowKey="alertId"
+                                    loading={loading}
+                                    pagination={{
+                                        pageSize: PAGINATION.DEFAULT_PAGE_SIZE,
+                                        showSizeChanger: true,
+                                        showQuickJumper: true,
+                                        showTotal: (total, range) =>
+                                            `${range[0]}-${range[1]} của ${total} mục`,
+                                    }}
+                                    scroll={{ x: 1000 }}
+                                />
+                            )
+                        },
+                        {
+                            key: 'low-stock',
+                            label: (
+                                <span>
+                                    <WarningOutlined />
+                                    Tồn kho thấp
+                                    {stats.lowStockCount > 0 && (
+                                        <Badge count={stats.lowStockCount} style={{ marginLeft: 8 }} />
+                                    )}
+                                </span>
+                            ),
+                            children: (
+                                <Table
+                                    columns={lowStockColumns}
+                                    dataSource={lowStockAlerts}
+                                    rowKey="ingredientId"
+                                    loading={loading}
+                                    pagination={{
+                                        pageSize: PAGINATION.DEFAULT_PAGE_SIZE,
+                                        showSizeChanger: true,
+                                        showQuickJumper: true,
+                                        showTotal: (total, range) =>
+                                            `${range[0]}-${range[1]} của ${total} mục`,
+                                    }}
+                                    scroll={{ x: 1000 }}
+                                />
+                            )
+                        },
+                        {
+                            key: 'expiry',
+                            label: (
+                                <span>
+                                    <ClockCircleOutlined />
+                                    Sắp hết hạn
+                                    {stats.expiryCount > 0 && (
+                                        <Badge count={stats.expiryCount} style={{ marginLeft: 8 }} />
+                                    )}
+                                </span>
+                            ),
+                            children: (
+                                <Table
+                                    columns={alertColumns}
+                                    dataSource={expiryAlerts}
+                                    rowKey="alertId"
+                                    loading={loading}
+                                    pagination={{
+                                        pageSize: PAGINATION.DEFAULT_PAGE_SIZE,
+                                        showSizeChanger: true,
+                                        showQuickJumper: true,
+                                        showTotal: (total, range) =>
+                                            `${range[0]}-${range[1]} của ${total} mục`,
+                                    }}
+                                    scroll={{ x: 1000 }}
+                                />
+                            )
+                        },
+                        {
+                            key: 'critical',
+                            label: (
+                                <span>
+                                    <ExclamationCircleOutlined />
+                                    Khẩn cấp
+                                    {stats.criticalCount > 0 && (
+                                        <Badge count={stats.criticalCount} style={{ marginLeft: 8 }} />
+                                    )}
+                                </span>
+                            ),
+                            children: (
+                                <Table
+                                    columns={alertColumns}
+                                    dataSource={criticalAlerts}
+                                    rowKey="alertId"
+                                    loading={loading}
+                                    pagination={{
+                                        pageSize: PAGINATION.DEFAULT_PAGE_SIZE,
+                                        showSizeChanger: true,
+                                        showQuickJumper: true,
+                                        showTotal: (total, range) =>
+                                            `${range[0]}-${range[1]} của ${total} mục`,
+                                    }}
+                                    scroll={{ x: 1000 }}
+                                />
+                            )
+                        }
+                    ]}
+                />
+            </Card>
         </div>
     );
 };

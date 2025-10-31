@@ -24,4 +24,6 @@ public class IngredientUpdatedEvent {
     private String currency;
     private String category;
     private LocalDateTime updatedAt;
+    private String imageUrl;
+    private String imagePublicId;
 }

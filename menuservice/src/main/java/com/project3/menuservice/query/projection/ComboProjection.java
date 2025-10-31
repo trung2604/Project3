@@ -7,12 +7,11 @@ import com.project3.menuservice.query.queries.GetAllCombosQuery;
 import com.project3.menuservice.query.queries.GetComboByIdQuery;
 import com.project3.menuservice.query.queries.GetCombosByMenuItemQuery;
 import org.axonframework.queryhandling.QueryHandler;
-import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Component
 public class ComboProjection {
@@ -23,32 +22,23 @@ public class ComboProjection {
     @QueryHandler
     public List<ComboResponse> getAll(GetAllCombosQuery query) {
         List<Combo> combos = comboRepository.findAll();
-        List<ComboResponse> result = new ArrayList<>();
-        combos.forEach(combo -> {
-            ComboResponse dto = new ComboResponse();
-            BeanUtils.copyProperties(combo, dto);
-            result.add(dto);
-        });
-        return result;
+        return combos.stream()
+                .map(ComboResponse::fromEntity)
+                .collect(Collectors.toList());
     }
 
     @QueryHandler
     public ComboResponse getById(GetComboByIdQuery query) {
-        Combo combo = comboRepository.findById(query.getComboId()).orElseThrow(() -> new RuntimeException("Combo not found"));
-        ComboResponse dto = new ComboResponse();
-        BeanUtils.copyProperties(combo, dto);
-        return dto;
+        Combo combo = comboRepository.findById(query.getComboId())
+                .orElseThrow(() -> new RuntimeException("Combo not found"));
+        return ComboResponse.fromEntity(combo);
     }
 
     @QueryHandler
     public List<ComboResponse> getByMenuItem(GetCombosByMenuItemQuery query) {
         List<Combo> combos = comboRepository.findByMenuItemIdAndActive(query.getMenuItemId());
-        List<ComboResponse> result = new ArrayList<>();
-        combos.forEach(combo -> {
-            ComboResponse dto = new ComboResponse();
-            BeanUtils.copyProperties(combo, dto);
-            result.add(dto);
-        });
-        return result;
+        return combos.stream()
+                .map(ComboResponse::fromEntity)
+                .collect(Collectors.toList());
     }
 }

@@ -27,4 +27,6 @@ public class IngredientResponse {
     private Double unitCost;
     private String currency;
     private String category;
+    private String imageUrl;
+    private String imagePublicId;
 }

@@ -57,15 +57,19 @@ const Dashboard = () => {
             switch (modalType) {
                 case 'ingredient':
                     setIsAddIngredientModalVisible(false);
+                    // TODO: Refresh ingredients data when API is implemented
                     break;
                 case 'dish':
                     setIsAddDishModalVisible(false);
+                    // TODO: Refresh menu items data when API is implemented
                     break;
                 case 'inventory':
                     setIsInventoryCheckModalVisible(false);
+                    // TODO: Refresh inventory data when API is implemented
                     break;
                 case 'report':
                     setIsReportModalVisible(false);
+                    // TODO: Refresh reports data when API is implemented
                     break;
             }
             form.resetFields();
@@ -126,20 +130,8 @@ const Dashboard = () => {
 
     const currentSection = getCurrentSection();
 
-    const stats = {
-        totalIngredients: 156,
-        lowStockItems: 12,
-        totalMenuItems: 89,
-        activeMenuItems: 76,
-        monthlyRevenue: 125000000,
-        alertCount: 8
-    };
-
-    const recentAlerts = [
-        { id: 1, type: 'low_stock', message: 'Cà chua sắp hết hàng', severity: 'warning' },
-        { id: 2, type: 'expiry', message: 'Rau xà lách hết hạn trong 2 ngày', severity: 'error' },
-        { id: 3, type: 'low_stock', message: 'Thịt bò chỉ còn 5kg', severity: 'warning' },
-    ];
+    // Stats and alerts are now loaded from useDashboardStats and useAlerts hooks
+    // No more mock data needed
 
     const inventoryTabs = [
         { key: 'ingredients', label: 'Nguyên liệu', children: <InventoryManagement /> },
@@ -269,7 +261,14 @@ const Dashboard = () => {
                 confirmLoading={loading}
                 width={600}
             >
-                <Form form={form} layout="vertical">
+                <Form
+                    form={form}
+                    layout="vertical"
+                    initialValues={{
+                        expiryDate: null
+                    }}
+                    preserve={false}
+                >
                     <Form.Item
                         name="name"
                         label="Tên nguyên liệu"
@@ -307,8 +306,30 @@ const Dashboard = () => {
                     <Form.Item
                         name="expiryDate"
                         label="Ngày hết hạn"
+                        rules={[
+                            {
+                                required: false,
+                                message: 'Vui lòng chọn ngày hết hạn!',
+                                validator: (_, value) => {
+                                    if (!value) return Promise.resolve();
+                                    if (value && typeof value.isValid === 'function' && !value.isValid()) {
+                                        return Promise.reject(new Error('Ngày không hợp lệ!'));
+                                    }
+                                    return Promise.resolve();
+                                }
+                            }
+                        ]}
+                        normalize={(value) => value || null}
+                        getValueProps={(value) => ({ value: value || null })}
+                        validateTrigger={[]}
                     >
-                        <DatePicker style={{ width: '100%' }} />
+                        <DatePicker
+                            style={{ width: '100%' }}
+                            format="YYYY-MM-DD"
+                            placeholder="Chọn ngày hết hạn"
+                            allowClear
+                            getValueFromEvent={(date) => date || null}
+                        />
                     </Form.Item>
                 </Form>
             </Modal>
@@ -321,7 +342,14 @@ const Dashboard = () => {
                 confirmLoading={loading}
                 width={600}
             >
-                <Form form={form} layout="vertical">
+                <Form
+                    form={form}
+                    layout="vertical"
+                    initialValues={{
+                        expiryDate: null
+                    }}
+                    preserve={false}
+                >
                     <Form.Item
                         name="name"
                         label="Tên món ăn"
@@ -379,13 +407,38 @@ const Dashboard = () => {
                 confirmLoading={loading}
                 width={600}
             >
-                <Form form={form} layout="vertical">
+                <Form
+                    form={form}
+                    layout="vertical"
+                    initialValues={{
+                        checkDate: null
+                    }}
+                >
                     <Form.Item
                         name="checkDate"
                         label="Ngày kiểm kê"
-                        rules={[{ required: true, message: 'Vui lòng chọn ngày kiểm kê!' }]}
+                        rules={[
+                            {
+                                required: true,
+                                message: 'Vui lòng chọn ngày kiểm kê!',
+                                validator: (_, value) => {
+                                    if (!value) return Promise.reject(new Error('Vui lòng chọn ngày kiểm kê!'));
+                                    if (value && typeof value.isValid === 'function' && !value.isValid()) {
+                                        return Promise.reject(new Error('Ngày không hợp lệ!'));
+                                    }
+                                    return Promise.resolve();
+                                }
+                            }
+                        ]}
+                        normalize={(value) => value || null}
                     >
-                        <DatePicker style={{ width: '100%' }} />
+                        <DatePicker
+                            style={{ width: '100%' }}
+                            format="YYYY-MM-DD"
+                            placeholder="Chọn ngày kiểm kê"
+                            allowClear
+                            getValueFromEvent={(date) => date || null}
+                        />
                     </Form.Item>
                     <Form.Item
                         name="checkType"
@@ -415,7 +468,13 @@ const Dashboard = () => {
                 confirmLoading={loading}
                 width={600}
             >
-                <Form form={form} layout="vertical">
+                <Form
+                    form={form}
+                    layout="vertical"
+                    initialValues={{
+                        dateRange: null
+                    }}
+                >
                     <Form.Item
                         name="reportType"
                         label="Loại báo cáo"
@@ -431,9 +490,34 @@ const Dashboard = () => {
                     <Form.Item
                         name="dateRange"
                         label="Khoảng thời gian"
-                        rules={[{ required: true, message: 'Vui lòng chọn khoảng thời gian!' }]}
+                        rules={[
+                            {
+                                required: true,
+                                message: 'Vui lòng chọn khoảng thời gian!',
+                                validator: (_, value) => {
+                                    if (!value || !Array.isArray(value) || value.length !== 2) {
+                                        return Promise.reject(new Error('Vui lòng chọn khoảng thời gian!'));
+                                    }
+                                    const [start, end] = value;
+                                    if (start && typeof start.isValid === 'function' && !start.isValid()) {
+                                        return Promise.reject(new Error('Ngày bắt đầu không hợp lệ!'));
+                                    }
+                                    if (end && typeof end.isValid === 'function' && !end.isValid()) {
+                                        return Promise.reject(new Error('Ngày kết thúc không hợp lệ!'));
+                                    }
+                                    return Promise.resolve();
+                                }
+                            }
+                        ]}
+                        normalize={(value) => value || null}
                     >
-                        <DatePicker.RangePicker style={{ width: '100%' }} />
+                        <DatePicker.RangePicker
+                            style={{ width: '100%' }}
+                            format="YYYY-MM-DD"
+                            placeholder={['Từ ngày', 'Đến ngày']}
+                            allowClear
+                            getValueFromEvent={(dates) => dates || null}
+                        />
                     </Form.Item>
                     <Form.Item
                         name="format"

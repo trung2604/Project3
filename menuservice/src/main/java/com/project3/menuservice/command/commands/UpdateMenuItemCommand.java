@@ -17,6 +17,10 @@ public class UpdateMenuItemCommand {
     private String categoryId; // Changed from category string to categoryId
     private String description;
     private Double price;
+    private String imageUrl;
+    private String imagePublicId;
+    private Integer preparationTime;
+    private String recipe;
     private List<String> ingredients;
 }
 

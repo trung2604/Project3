@@ -16,6 +16,10 @@ public class MenuItemCreatedEvent {
     private String description;
     private Double price;
     private Boolean active;
+    private String imageUrl;
+    private String imagePublicId;
+    private Integer preparationTime;
+    private String recipe;
     private List<String> ingredients;
 }
 

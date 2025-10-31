@@ -25,4 +25,6 @@ public class IngredientCreatedEvent {
     private String currency;
     private String category;
     private LocalDateTime createdAt;
+    private String imageUrl;
+    private String imagePublicId;
 }

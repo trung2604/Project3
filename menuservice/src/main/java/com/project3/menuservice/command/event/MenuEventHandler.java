@@ -6,6 +6,7 @@ import com.project3.menuservice.command.entity.Combo;
 import com.project3.menuservice.command.entity.ComboRepository;
 import com.project3.menuservice.command.entity.MenuItem;
 import com.project3.menuservice.command.entity.MenuItemRepository;
+import com.project3.menuservice.service.CloudinaryService;
 import org.axonframework.eventhandling.EventHandler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -24,6 +25,9 @@ public class MenuEventHandler {
     
     @Autowired
     private ComboRepository comboRepository;
+    
+    @Autowired
+    private CloudinaryService cloudinaryService;
 
     @EventHandler
     public void on(MenuItemCreatedEvent event) {
@@ -41,6 +45,10 @@ public class MenuEventHandler {
         item.setDescription(event.getDescription());
         item.setPrice(event.getPrice());
         item.setActive(Boolean.TRUE.equals(event.getActive()));
+        item.setImageUrl(event.getImageUrl());
+        item.setImagePublicId(event.getImagePublicId());
+        item.setPreparationTime(event.getPreparationTime());
+        item.setRecipe(event.getRecipe());
         item.setIngredients(event.getIngredients() != null ? new ArrayList<>(event.getIngredients()) : new ArrayList<>());
         menuItemRepository.save(item);
     }
@@ -58,6 +66,10 @@ public class MenuEventHandler {
         
         item.setDescription(event.getDescription());
         item.setPrice(event.getPrice());
+        item.setImageUrl(event.getImageUrl());
+        item.setImagePublicId(event.getImagePublicId());
+        item.setPreparationTime(event.getPreparationTime());
+        item.setRecipe(event.getRecipe());
         item.setIngredients(event.getIngredients() != null ? new ArrayList<>(event.getIngredients()) : new ArrayList<>());
         menuItemRepository.save(item);
     }
@@ -80,6 +92,12 @@ public class MenuEventHandler {
 
     @EventHandler
     public void on(MenuItemDeletedEvent event) {
+        // Delete image from Cloudinary if exists
+        menuItemRepository.findById(event.getMenuItemId()).ifPresent(item -> {
+            if (item.getImagePublicId() != null && !item.getImagePublicId().isEmpty()) {
+                cloudinaryService.deleteImage(item.getImagePublicId());
+            }
+        });
         menuItemRepository.deleteById(event.getMenuItemId());
     }
 

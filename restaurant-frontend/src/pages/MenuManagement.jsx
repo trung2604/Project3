@@ -10,28 +10,32 @@ import {
     Modal,
     Form,
     InputNumber,
-    Upload,
     App,
     Popconfirm,
     Row,
     Col,
     Statistic,
+    Upload,
     Image,
-    Switch
+    Switch,
+    Divider
 } from 'antd';
 import {
     PlusOutlined,
     EditOutlined,
-    DeleteOutlined,
     SearchOutlined,
     ReloadOutlined,
-    BookOutlined,
+    DeleteOutlined,
+    ShoppingCartOutlined,
     DollarOutlined,
     EyeOutlined,
+    SettingOutlined,
     UploadOutlined
 } from '@ant-design/icons';
 import { menuService } from '../services/menuService';
-import { PAGINATION, STATUS } from '../constants.js';
+import { inventoryService } from '../services/inventoryService';
+import { cloudinaryService } from '../services/cloudinaryService';
+import { PAGINATION } from '../constants.js';
 
 const { Option } = Select;
 const { Search } = Input;
@@ -41,6 +45,7 @@ const MenuManagement = () => {
     const { message } = App.useApp();
     const [menuItems, setMenuItems] = useState([]);
     const [categories, setCategories] = useState([]);
+    const [ingredients, setIngredients] = useState([]);
     const [loading, setLoading] = useState(false);
     const [pagination, setPagination] = useState({
         current: 1,
@@ -48,16 +53,16 @@ const MenuManagement = () => {
         total: 0
     });
     const [filters, setFilters] = useState({
-        categoryId: undefined,
-        active: undefined,
-        minPrice: undefined,
-        maxPrice: undefined,
+        categoryId: '',
+        active: null,
         search: ''
     });
     const [modalVisible, setModalVisible] = useState(false);
-    const [modalType, setModalType] = useState('create'); // create, edit
+    const [modalType, setModalType] = useState('create'); // create, edit, ingredients
     const [selectedMenuItem, setSelectedMenuItem] = useState(null);
     const [form] = Form.useForm();
+    const [uploading, setUploading] = useState(false);
+    const [imagePreview, setImagePreview] = useState(null);
 
     // Load menu items data
     const loadMenuItems = async (page = 1, size = PAGINATION.DEFAULT_PAGE_SIZE) => {
@@ -66,11 +71,13 @@ const MenuManagement = () => {
             const params = {
                 page: page - 1, // Backend uses 0-based pagination
                 size,
-                ...filters
+                // Only include non-empty filters
+                ...(filters.categoryId && filters.categoryId.trim() !== '' && { categoryId: filters.categoryId }),
+                ...(filters.active !== null && filters.active !== undefined && { active: filters.active }),
+                ...(filters.search && filters.search.trim() !== '' && { search: filters.search })
             };
 
             const response = await menuService.getMenuItems(params);
-            // Backend returns PagedMenuItemResponse with different structure
             const data = response.data;
             setMenuItems(data.items || []);
             setPagination(prev => ({
@@ -90,18 +97,26 @@ const MenuManagement = () => {
     const loadCategories = async () => {
         try {
             const response = await menuService.getCategories();
-            const raw = Array.isArray(response.data) ? response.data : [];
-            // Filter out null/undefined IDs to avoid Select value warnings
-            const sanitized = raw.filter(c => c && c.id != null);
-            setCategories(sanitized);
+            setCategories(response.data || []);
         } catch (error) {
             console.error('Error loading categories:', error);
+        }
+    };
+
+    // Load ingredients
+    const loadIngredients = async () => {
+        try {
+            const response = await inventoryService.getIngredients({ size: 1000 });
+            setIngredients(response.data.ingredients || []);
+        } catch (error) {
+            console.error('Error loading ingredients:', error);
         }
     };
 
     useEffect(() => {
         loadMenuItems();
         loadCategories();
+        loadIngredients();
     }, [filters]);
 
     // Handle table changes
@@ -123,11 +138,21 @@ const MenuManagement = () => {
         setModalType(type);
         setSelectedMenuItem(menuItem);
         setModalVisible(true);
+        setImagePreview(null);
 
         if (type === 'edit' && menuItem) {
             form.setFieldsValue({
                 ...menuItem,
-                ingredients: menuItem.ingredients || [] // Backend expects List<String>
+                categoryId: menuItem.categoryId?.toString(),
+                imageUrl: menuItem.imageUrl || undefined,
+                imagePublicId: menuItem.imagePublicId || undefined
+            });
+            if (menuItem.imageUrl) {
+                setImagePreview(menuItem.imageUrl);
+            }
+        } else if (type === 'ingredients' && menuItem) {
+            form.setFieldsValue({
+                ingredients: menuItem.ingredients || []
             });
         } else {
             form.resetFields();
@@ -137,13 +162,24 @@ const MenuManagement = () => {
     const handleModalOk = async () => {
         try {
             const values = await form.validateFields();
+            if (modalType === 'create' && !values.imageUrl) {
+                message.error('Vui lòng upload hình ảnh trước khi lưu');
+                return;
+            }
+            const payload = {
+                ...values,
+                categoryId: values.categoryId != null ? String(values.categoryId) : values.categoryId
+            };
 
             if (modalType === 'create') {
-                await menuService.createMenuItem(values);
+                await menuService.createMenuItem(payload);
                 message.success('Tạo món ăn thành công');
             } else if (modalType === 'edit') {
-                await menuService.updateMenuItem(selectedMenuItem.id, values);
+                await menuService.updateMenuItem(selectedMenuItem.menuItemId, payload);
                 message.success('Cập nhật món ăn thành công');
+            } else if (modalType === 'ingredients') {
+                await menuService.updateMenuItemIngredients(selectedMenuItem.menuItemId, values.ingredients);
+                message.success('Cập nhật nguyên liệu thành công');
             }
 
             setModalVisible(false);
@@ -151,17 +187,6 @@ const MenuManagement = () => {
         } catch (error) {
             message.error('Có lỗi xảy ra khi thực hiện thao tác');
             console.error('Error:', error);
-        }
-    };
-
-    // Delete menu item
-    const handleDelete = async (id) => {
-        try {
-            await menuService.deleteMenuItem(id);
-            message.success('Xóa món ăn thành công');
-            loadMenuItems(pagination.current, pagination.pageSize);
-        } catch (error) {
-            message.error('Lỗi khi xóa món ăn');
         }
     };
 
@@ -176,6 +201,60 @@ const MenuManagement = () => {
         }
     };
 
+    // Delete menu item
+    const handleDeleteMenuItem = async (id) => {
+        try {
+            await menuService.deleteMenuItem(id);
+            message.success('Xóa món ăn thành công');
+            loadMenuItems(pagination.current, pagination.pageSize);
+        } catch (error) {
+            message.error('Lỗi khi xóa món ăn');
+        }
+    };
+
+    // Update price
+    const handleUpdatePrice = async (id, price) => {
+        try {
+            await menuService.updateMenuItemPrice(id, price);
+            message.success('Cập nhật giá thành công');
+            loadMenuItems(pagination.current, pagination.pageSize);
+        } catch (error) {
+            message.error('Lỗi khi cập nhật giá');
+        }
+    };
+
+    // Handle image upload
+    const handleImageUpload = async (file) => {
+        setUploading(true);
+        try {
+            const result = await cloudinaryService.uploadImage(file);
+
+            form.setFieldsValue({
+                imageUrl: result.url,
+                imagePublicId: result.publicId
+            });
+            setImagePreview(result.url);
+            message.success('Upload ảnh thành công');
+            return false; // Prevent default upload
+        } catch (error) {
+            console.error('Upload error:', error);
+            message.error('Lỗi khi upload ảnh: ' + error.message);
+            return false;
+        } finally {
+            setUploading(false);
+        }
+    };
+
+    // Handle image preview
+    const handleImagePreview = (file) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            setImagePreview(e.target.result);
+        };
+        reader.readAsDataURL(file);
+        return false; // Prevent default upload
+    };
+
     // Table columns
     const columns = [
         {
@@ -188,8 +267,8 @@ const MenuManagement = () => {
                     width={60}
                     height={60}
                     src={imageUrl || '/placeholder-food.jpg'}
-                    fallback="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMIAAADDCAYAAADQvc6UAAABRWlDQ1BJQ0MgUHJvZmlsZQAAKJFjYGASSSwoyGFhYGDIzSspCnJ3UoiIjFJgf8LAwSDCIMogwMCcmFxc4BgQ4ANUwgCjUcG3awyMIPqyLsis7PPOq3QdDFcvjV3jOD1boQVTPQrgSkktTgbSf4A4LbmgqISBgTEFyFYuLykAsTuAbJEkoKGAXW3s9AACn97S3xCyIe4u/4uBwQBXhk1Bc0BHTkcdQEBHQl4erFQcnoS1BfADgUeChZiDvIGUwYiGxraWA8QcJ+ZgYFlgI8Bq4FBJx1iCGBYAR4B4p4sMz4B4YQkOAQMFc0aMG6PwgE1JxRQMpC0MFQwJgNYqRYusB2Nwj5Gx0Fi/ws//4/WL2cVt3FiX12XgO+v//f9f///3XQ//fxbDw4BuNAD8VgD0Z4hxUAAAABmJLR0QA/wD/AP+gvaeTAAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAB3RJTUUH5wEDCy0b8f3f2QAAABl0RVh0Q29tbWVudABDcmVhdGVkIHdpdGggR0lNUFeBDhcAAAcaSURBVHja7doxAQAwDASx/z/NQYQJQwAAAP//AwDfAAABX3ZhkwAAAABJRU5ErkJggg=="
-                    className="rounded object-cover"
+                    fallback="/placeholder-food.jpg"
+                    style={{ objectFit: 'cover', borderRadius: 8 }}
                 />
             ),
         },
@@ -199,8 +278,8 @@ const MenuManagement = () => {
             key: 'name',
             render: (text, record) => (
                 <div>
-                    <div className="font-medium">{text}</div>
-                    <div className="text-sm text-gray-500">{record.description}</div>
+                    <div style={{ fontWeight: '500', fontSize: '14px' }}>{text}</div>
+                    <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>{record.description}</div>
                 </div>
             ),
         },
@@ -214,31 +293,37 @@ const MenuManagement = () => {
             title: 'Giá',
             dataIndex: 'price',
             key: 'price',
-            render: (price) => (
-                <div className="font-medium text-green-600">
-                    {price?.toLocaleString()} VNĐ
+            render: (price, record) => (
+                <div>
+                    <div style={{ fontWeight: '500', fontSize: '14px' }}>{price?.toLocaleString()} VNĐ</div>
+                    <div style={{ fontSize: '12px', color: '#999', marginTop: '2px' }}>
+                        {record.ingredients?.length || 0} nguyên liệu
+                    </div>
                 </div>
             ),
         },
         {
-            title: 'Thời gian chế biến',
-            dataIndex: 'preparationTime',
-            key: 'preparationTime',
-            render: (time) => `${time} phút`,
-        },
-        {
-            title: 'Độ phổ biến',
-            dataIndex: 'popularityScore',
-            key: 'popularityScore',
-            render: (score) => (
-                <div className="flex items-center">
-                    <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
+            title: 'Công thức',
+            dataIndex: 'recipe',
+            key: 'recipe',
+            width: 200,
+            render: (recipe) => (
+                <div style={{ maxWidth: '200px' }}>
+                    {recipe ? (
                         <div
-                            className="bg-yellow-500 h-2 rounded-full"
-                            style={{ width: `${score || 0}%` }}
-                        ></div>
-                    </div>
-                    <span className="text-sm">{score || 0}%</span>
+                            style={{
+                                fontSize: '12px',
+                                color: '#666',
+                                cursor: 'pointer',
+                                lineHeight: '1.4'
+                            }}
+                            title={recipe}
+                        >
+                            {recipe.length > 50 ? `${recipe.substring(0, 50)}...` : recipe}
+                        </div>
+                    ) : (
+                        <span style={{ color: '#999', fontSize: '12px' }}>Chưa có công thức</span>
+                    )}
                 </div>
             ),
         },
@@ -249,7 +334,7 @@ const MenuManagement = () => {
             render: (active, record) => (
                 <Switch
                     checked={active}
-                    onChange={(checked) => handleToggleActive(record.id, checked)}
+                    onChange={(checked) => handleToggleActive(record.menuItemId, checked)}
                     checkedChildren="Bán"
                     unCheckedChildren="Tạm dừng"
                 />
@@ -262,25 +347,60 @@ const MenuManagement = () => {
                 <Space>
                     <Button
                         size="small"
-                        icon={<EyeOutlined />}
-                        onClick={() => showModal('view', record)}
-                    >
-                        Xem
-                    </Button>
-                    <Button
-                        size="small"
                         icon={<EditOutlined />}
                         onClick={() => showModal('edit', record)}
                     >
                         Sửa
                     </Button>
+                    <Button
+                        size="small"
+                        icon={<ShoppingCartOutlined />}
+                        onClick={() => showModal('ingredients', record)}
+                    >
+                        Nguyên liệu
+                    </Button>
+                    {record.recipe && (
+                        <Button
+                            size="small"
+                            icon={<EyeOutlined />}
+                            onClick={() => {
+                                Modal.info({
+                                    title: `Công thức: ${record.name}`,
+                                    content: (
+                                        <div style={{ whiteSpace: 'pre-wrap', maxHeight: '400px', overflow: 'auto' }}>
+                                            {record.recipe}
+                                        </div>
+                                    ),
+                                    width: 600,
+                                });
+                            }}
+                        >
+                            Công thức
+                        </Button>
+                    )}
+                    <Button
+                        size="small"
+                        icon={<DollarOutlined />}
+                        onClick={() => {
+                            const newPrice = prompt('Nhập giá mới:', record.price);
+                            if (newPrice && !isNaN(newPrice)) {
+                                handleUpdatePrice(record.menuItemId, parseFloat(newPrice));
+                            }
+                        }}
+                    >
+                        Giá
+                    </Button>
                     <Popconfirm
                         title="Bạn có chắc muốn xóa món ăn này?"
-                        onConfirm={() => handleDelete(record.id)}
+                        onConfirm={() => handleDeleteMenuItem(record.menuItemId)}
                         okText="Xóa"
                         cancelText="Hủy"
                     >
-                        <Button size="small" icon={<DeleteOutlined />} danger>
+                        <Button
+                            size="small"
+                            icon={<DeleteOutlined />}
+                            danger
+                        >
                             Xóa
                         </Button>
                     </Popconfirm>
@@ -294,57 +414,219 @@ const MenuManagement = () => {
         switch (modalType) {
             case 'create': return 'Tạo món ăn mới';
             case 'edit': return 'Chỉnh sửa món ăn';
-            case 'view': return 'Chi tiết món ăn';
+            case 'ingredients': return 'Quản lý nguyên liệu';
             default: return 'Thao tác';
         }
     };
 
-    return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
+    // Get form fields based on modal type
+    const getFormFields = () => {
+        if (modalType === 'ingredients') {
+            return (
+                <>
+                    <Form.Item
+                        name="ingredients"
+                        label="Nguyên liệu"
+                        rules={[{ required: true, message: 'Vui lòng chọn ít nhất một nguyên liệu' }]}
+                    >
+                        <Select
+                            mode="multiple"
+                            placeholder="Chọn nguyên liệu"
+                            style={{ width: '100%' }}
+                            optionLabelProp="label"
+                        >
+                            {ingredients.map(ingredient => (
+                                <Option
+                                    key={ingredient.ingredientId}
+                                    value={ingredient.ingredientId}
+                                    label={ingredient.name}
+                                >
+                                    <div>
+                                        <div className="font-medium">{ingredient.name}</div>
+                                        <div className="text-sm text-gray-500">
+                                            Tồn kho: {ingredient.currentStock} {ingredient.unit}
+                                        </div>
+                                    </div>
+                                </Option>
+                            ))}
+                        </Select>
+                    </Form.Item>
+                </>
+            );
+        }
+
+        return (
+            <>
+                <Form.Item
+                    name="name"
+                    label="Tên món ăn"
+                    rules={[{ required: true, message: 'Vui lòng nhập tên món ăn' }]}
+                >
+                    <Input />
+                </Form.Item>
+                <Form.Item
+                    name="description"
+                    label="Mô tả"
+                >
+                    <TextArea rows={3} />
+                </Form.Item>
+                <Row gutter={16}>
+                    <Col span={12}>
+                        <Form.Item
+                            name="categoryId"
+                            label="Danh mục"
+                            rules={[{ required: true, message: 'Vui lòng chọn danh mục' }]}
+                        >
+                            <Select placeholder="Chọn danh mục">
+                                {categories.map(category => (
+                                    <Option key={category.categoryId} value={category.categoryId}>
+                                        {category.name}
+                                    </Option>
+                                ))}
+                            </Select>
+                        </Form.Item>
+                    </Col>
+                    <Col span={12}>
+                        <Form.Item
+                            name="price"
+                            label="Giá (VNĐ)"
+                            rules={[{ required: true, message: 'Vui lòng nhập giá' }]}
+                        >
+                            <InputNumber min={0} style={{ width: '100%' }} />
+                        </Form.Item>
+                    </Col>
+                </Row>
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-800 mb-2">Quản lý menu</h1>
-                    <p className="text-gray-600">Quản lý món ăn và danh mục</p>
+                    <div style={{ marginBottom: 8 }}>Hình ảnh</div>
+                    <Upload
+                        beforeUpload={handleImageUpload}
+                        onPreview={handleImagePreview}
+                        showUploadList={false}
+                        accept="image/*"
+                        listType="picture-card"
+                        className="image-uploader"
+                    >
+                        {imagePreview ? (
+                            <img src={imagePreview} alt="preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                            <div>
+                                <UploadOutlined />
+                                <div style={{ marginTop: 8 }}>Upload</div>
+                            </div>
+                        )}
+                    </Upload>
+                </div>
+                {uploading && <div style={{ marginTop: 8, color: '#1890ff' }}>Đang upload...</div>}
+                {/* Hidden fields for uploaded image metadata */}
+                <Form.Item name="imageUrl" style={{ display: 'none' }} rules={[{ required: true, message: 'Vui lòng upload hình ảnh' }]}>
+                    <Input />
+                </Form.Item>
+                <Form.Item name="imagePublicId" style={{ display: 'none' }}>
+                    <Input />
+                </Form.Item>
+                <Form.Item
+                    name="preparationTime"
+                    label="Thời gian chuẩn bị (phút)"
+                >
+                    <InputNumber min={0} style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item
+                    name="recipe"
+                    label="Công thức món ăn"
+                >
+                    <TextArea
+                        rows={6}
+                        placeholder="Nhập các bước chế biến món ăn..."
+                        showCount
+                        maxLength={2000}
+                    />
+                </Form.Item>
+                <Form.Item
+                    name="active"
+                    label="Trạng thái"
+                    valuePropName="checked"
+                    initialValue={true}
+                >
+                    <Switch checkedChildren="Bán" unCheckedChildren="Tạm dừng" />
+                </Form.Item>
+            </>
+        );
+    };
+
+    // Get statistics
+    const getStatistics = () => {
+        const totalItems = menuItems.length;
+        const activeItems = menuItems.filter(item => item.active).length;
+        const inactiveItems = menuItems.filter(item => !item.active).length;
+        const avgPrice = menuItems.length > 0
+            ? menuItems.reduce((sum, item) => sum + (item.price || 0), 0) / menuItems.length
+            : 0;
+
+        return {
+            totalItems,
+            activeItems,
+            inactiveItems,
+            avgPrice
+        };
+    };
+
+    const stats = getStatistics();
+
+    return (
+        <div style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                <div>
+                    <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#1f2937', marginBottom: '8px' }}>Quản lý thực đơn</h1>
+                    <p style={{ color: '#6b7280' }}>Quản lý món ăn và thực đơn</p>
                 </div>
                 <Button
                     type="primary"
                     icon={<PlusOutlined />}
                     onClick={() => showModal('create')}
-                    className="restaurant-button"
                 >
                     Thêm món ăn
                 </Button>
             </div>
 
             {/* Statistics Cards */}
-            <Row gutter={[16, 16]}>
-                <Col xs={24} sm={8}>
-                    <Card className="restaurant-card">
+            <Row gutter={[16, 16]} style={{ marginBottom: '24px' }}>
+                <Col xs={24} sm={6}>
+                    <Card>
                         <Statistic
                             title="Tổng món ăn"
-                            value={pagination.total}
-                            prefix={<BookOutlined />}
+                            value={stats.totalItems}
+                            prefix={<ShoppingCartOutlined />}
                             valueStyle={{ color: '#1890ff' }}
                         />
                     </Card>
                 </Col>
-                <Col xs={24} sm={8}>
-                    <Card className="restaurant-card">
+                <Col xs={24} sm={6}>
+                    <Card>
                         <Statistic
-                            title="Món đang bán"
-                            value={menuItems.filter(item => item.active).length}
+                            title="Đang bán"
+                            value={stats.activeItems}
                             prefix={<EyeOutlined />}
                             valueStyle={{ color: '#52c41a' }}
                         />
                     </Card>
                 </Col>
-                <Col xs={24} sm={8}>
-                    <Card className="restaurant-card">
+                <Col xs={24} sm={6}>
+                    <Card>
+                        <Statistic
+                            title="Tạm dừng"
+                            value={stats.inactiveItems}
+                            prefix={<SettingOutlined />}
+                            valueStyle={{ color: '#fa8c16' }}
+                        />
+                    </Card>
+                </Col>
+                <Col xs={24} sm={6}>
+                    <Card>
                         <Statistic
                             title="Giá trung bình"
-                            value={menuItems.reduce((sum, item) => sum + (item.price || 0), 0) / menuItems.length || 0}
+                            value={stats.avgPrice}
                             prefix={<DollarOutlined />}
-                            valueStyle={{ color: '#f59e0b' }}
+                            valueStyle={{ color: '#722ed1' }}
                             formatter={(value) => `${Math.round(value).toLocaleString()} VNĐ`}
                         />
                     </Card>
@@ -352,9 +634,9 @@ const MenuManagement = () => {
             </Row>
 
             {/* Filters */}
-            <Card className="restaurant-card">
+            <Card style={{ marginBottom: '24px' }}>
                 <Row gutter={[16, 16]} align="middle">
-                    <Col xs={24} sm={6}>
+                    <Col xs={24} sm={8}>
                         <Search
                             placeholder="Tìm kiếm món ăn..."
                             onSearch={handleSearch}
@@ -369,7 +651,7 @@ const MenuManagement = () => {
                             onChange={(value) => handleFilterChange('categoryId', value)}
                         >
                             {categories.map(category => (
-                                <Option key={String(category.id)} value={String(category.id)}>
+                                <Option key={category.categoryId} value={category.categoryId}>
                                     {category.name}
                                 </Option>
                             ))}
@@ -386,11 +668,11 @@ const MenuManagement = () => {
                             <Option value={false}>Tạm dừng</Option>
                         </Select>
                     </Col>
-                    <Col xs={24} sm={6}>
+                    <Col xs={24} sm={4}>
                         <Button
                             icon={<ReloadOutlined />}
                             onClick={() => loadMenuItems()}
-                            className="w-full"
+                            style={{ width: '100%' }}
                         >
                             Làm mới
                         </Button>
@@ -399,11 +681,11 @@ const MenuManagement = () => {
             </Card>
 
             {/* Table */}
-            <Card className="restaurant-card">
+            <Card>
                 <Table
                     columns={columns}
                     dataSource={menuItems}
-                    rowKey="id"
+                    rowKey="menuItemId"
                     loading={loading}
                     pagination={{
                         ...pagination,
@@ -422,87 +704,18 @@ const MenuManagement = () => {
             <Modal
                 title={getModalTitle()}
                 open={modalVisible}
-                onOk={modalType !== 'view' ? handleModalOk : undefined}
+                onOk={handleModalOk}
                 onCancel={() => setModalVisible(false)}
-                width={800}
+                width={600}
                 okText="Lưu"
                 cancelText="Hủy"
-                footer={modalType === 'view' ? [
-                    <Button key="close" onClick={() => setModalVisible(false)}>
-                        Đóng
-                    </Button>
-                ] : undefined}
             >
-                <Form form={form} layout="vertical">
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item
-                                name="name"
-                                label="Tên món ăn"
-                                rules={[{ required: true, message: 'Vui lòng nhập tên món ăn' }]}
-                            >
-                                <Input />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item
-                                name="categoryId"
-                                label="Danh mục"
-                                rules={[{ required: true, message: 'Vui lòng chọn danh mục' }]}
-                            >
-                                <Select>
-                                    {categories.map(category => (
-                                        <Option key={String(category.id)} value={String(category.id)}>
-                                            {category.name}
-                                        </Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-                        </Col>
-                    </Row>
-
-                    <Form.Item
-                        name="description"
-                        label="Mô tả"
-                    >
-                        <TextArea rows={3} />
-                    </Form.Item>
-
-                    <Form.Item
-                        name="price"
-                        label="Giá"
-                        rules={[{ required: true, message: 'Vui lòng nhập giá' }]}
-                    >
-                        <InputNumber min={0} style={{ width: '100%' }} />
-                    </Form.Item>
-
-                    <Form.Item
-                        name="ingredients"
-                        label="Nguyên liệu"
-                        rules={[{ required: true, message: 'Vui lòng chọn ít nhất một nguyên liệu' }]}
-                    >
-                        <Select
-                            mode="multiple"
-                            placeholder="Chọn nguyên liệu"
-                            style={{ width: '100%' }}
-                        >
-                            {/* This would be populated with actual ingredients from API */}
-                            <Option value="ingredient1">Cà chua</Option>
-                            <Option value="ingredient2">Thịt bò</Option>
-                            <Option value="ingredient3">Hành tây</Option>
-                            <Option value="ingredient4">Tỏi</Option>
-                            <Option value="ingredient5">Gừng</Option>
-                        </Select>
-                    </Form.Item>
-
-                    <Form.Item
-                        name="active"
-                        label="Trạng thái"
-                        valuePropName="checked"
-                        initialValue={true}
-                    >
-                        <Switch checkedChildren="Đang bán" unCheckedChildren="Tạm dừng" />
-                    </Form.Item>
+                <Form
+                    form={form}
+                    layout="vertical"
+                    preserve={false}
+                >
+                    {getFormFields()}
                 </Form>
             </Modal>
         </div>

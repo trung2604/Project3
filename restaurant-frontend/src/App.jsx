@@ -4,6 +4,12 @@ import { ConfigProvider, App as AntApp } from 'antd';
 import viVN from 'antd/locale/vi_VN';
 import AppLayout from './components/Layout/AppLayout';
 import Dashboard from './pages/Dashboard';
+import InventoryManagement from './pages/InventoryManagement';
+import InventoryAlerts from './pages/InventoryAlerts';
+import InventoryTransactions from './pages/InventoryTransactions';
+import MenuManagement from './pages/MenuManagement';
+import MenuCategories from './pages/MenuCategories';
+import MenuCombos from './pages/MenuCombos';
 import { RestaurantProvider } from './context/RestaurantContext';
 
 // Ant Design theme configuration
@@ -53,8 +59,12 @@ function App() {
                                     <AppLayout>
                                         <Routes>
                                             <Route path="/" element={<Dashboard />} />
-                                            <Route path="/inventory" element={<Dashboard />} />
-                                            <Route path="/menu" element={<Dashboard />} />
+                                            <Route path="/inventory" element={<InventoryManagement />} />
+                                            <Route path="/inventory/alerts" element={<InventoryAlerts />} />
+                                            <Route path="/inventory/transactions" element={<InventoryTransactions />} />
+                                            <Route path="/menu" element={<MenuManagement />} />
+                                            <Route path="/menu/categories" element={<MenuCategories />} />
+                                            <Route path="/menu/combos" element={<MenuCombos />} />
                                             <Route path="/orders" element={<Dashboard />} />
                                             <Route path="/staff" element={<Dashboard />} />
                                             <Route path="/settings" element={<Dashboard />} />

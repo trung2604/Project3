@@ -19,6 +19,10 @@ public class MenuItemResponse {
     private String description;
     private Double price;
     private Boolean active;
+    private String imageUrl;
+    private String imagePublicId;
+    private Integer preparationTime;
+    private String recipe;
     private List<String> ingredients;
 
     public static MenuItemResponse fromEntity(MenuItem item) {
@@ -29,6 +33,10 @@ public class MenuItemResponse {
         dto.setDescription(item.getDescription());
         dto.setPrice(item.getPrice());
         dto.setActive(item.getActive());
+        dto.setImageUrl(item.getImageUrl());
+        dto.setImagePublicId(item.getImagePublicId());
+        dto.setPreparationTime(item.getPreparationTime());
+        dto.setRecipe(item.getRecipe());
         
         // Safely handle ingredients to avoid lazy loading issues
         try {

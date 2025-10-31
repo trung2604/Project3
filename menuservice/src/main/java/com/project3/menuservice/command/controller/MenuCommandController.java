@@ -29,6 +29,7 @@ public class MenuCommandController {
             @ApiResponse(responseCode = "500", description = "Lỗi server")
     })
     public String create(@RequestBody CreateMenuItemCommand cmd) {
+        
         // Tự động sinh ID nếu không có hoặc rỗng
         if (cmd.getMenuItemId() == null || cmd.getMenuItemId().isEmpty()) {
             cmd.setMenuItemId(IdGenerator.generateMenuItemId());

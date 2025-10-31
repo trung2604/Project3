@@ -29,6 +29,10 @@ public class MenuItemAggregate {
     private String description;
     private Double price;
     private Boolean active;
+    private String imageUrl;
+    private String imagePublicId;
+    private Integer preparationTime;
+    private String recipe;
     private List<String> ingredients = new ArrayList<>();
 
     @CommandHandler
@@ -46,6 +50,10 @@ public class MenuItemAggregate {
         this.description = event.getDescription();
         this.price = event.getPrice();
         this.active = event.getActive();
+        this.imageUrl = event.getImageUrl();
+        this.imagePublicId = event.getImagePublicId();
+        this.preparationTime = event.getPreparationTime();
+        this.recipe = event.getRecipe();
         this.ingredients = event.getIngredients() != null ? new ArrayList<>(event.getIngredients()) : new ArrayList<>();
     }
 
@@ -62,6 +70,10 @@ public class MenuItemAggregate {
         this.categoryId = event.getCategoryId();
         this.description = event.getDescription();
         this.price = event.getPrice();
+        this.imageUrl = event.getImageUrl();
+        this.imagePublicId = event.getImagePublicId();
+        this.preparationTime = event.getPreparationTime();
+        this.recipe = event.getRecipe();
         this.ingredients = event.getIngredients() != null ? new ArrayList<>(event.getIngredients()) : new ArrayList<>();
     }
 

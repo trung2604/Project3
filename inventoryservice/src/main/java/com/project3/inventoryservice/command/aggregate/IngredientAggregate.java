@@ -39,6 +39,8 @@ public class IngredientAggregate {
     private Double unitCost;
     private String currency;
     private String category;
+    private String imageUrl;
+    private String imagePublicId;
     
     @CommandHandler
     public IngredientAggregate(CreateIngredientCommand command) {
@@ -197,6 +199,8 @@ public class IngredientAggregate {
         this.unitCost = event.getUnitCost();
         this.currency = event.getCurrency();
         this.category = event.getCategory();
+        this.imageUrl = event.getImageUrl();
+        this.imagePublicId = event.getImagePublicId();
     }
     
     @EventSourcingHandler
@@ -213,6 +217,8 @@ public class IngredientAggregate {
         this.unitCost = event.getUnitCost();
         this.currency = event.getCurrency();
         this.category = event.getCategory();
+        this.imageUrl = event.getImageUrl();
+        this.imagePublicId = event.getImagePublicId();
     }
     
     @EventSourcingHandler

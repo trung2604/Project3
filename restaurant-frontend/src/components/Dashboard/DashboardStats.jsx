@@ -17,24 +17,24 @@ const DashboardStats = () => {
             title: "Tổng nguyên liệu",
             value: stats.totalIngredients,
             icon: <ShoppingCartOutlined />,
-            color: '#3f8600',
-            trend: 5.2
+            color: '#3f8600'
+            // Removed hardcoded trend
         },
         {
             title: "Món ăn đang bán",
             value: stats.activeMenuItems,
             icon: <BookOutlined />,
-            color: '#3f8600',
-            trend: 2.1
+            color: '#3f8600'
+            // Removed hardcoded trend
         },
         {
             title: "Doanh thu tháng",
             value: stats.monthlyRevenue,
             icon: <DollarOutlined />,
             color: '#cf1322',
-            trend: -1.5,
             formatter: (value) => `${(value / 1000000).toFixed(0)}M`,
             suffix: "VNĐ"
+            // Removed hardcoded trend
         },
         {
             title: "Cảnh báo",

@@ -1,19 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Tabs, Modal, Form, Input, InputNumber, Select, DatePicker, Upload, message } from 'antd';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useCurrentSection } from '../hooks/useDashboard';
+import { useAuth } from '../context/AuthContext';
 import DashboardStats from '../components/Dashboard/DashboardStats';
 import DashboardOverview from '../components/Dashboard/DashboardOverview';
 import DashboardQuickActions from '../components/Dashboard/DashboardQuickActions';
 import InventoryManagement from './InventoryManagement';
 import MenuManagement from './MenuManagement';
+import MenuView from './MenuView';
 import InventoryAlerts from './InventoryAlerts';
 import InventoryTransactions from './InventoryTransactions';
 import CategoryManagement from './CategoryManagement';
 import CombosManagement from './CombosManagement';
+import ErrorPage from '../components/Common/ErrorPage';
+import Loading from '../components/Common/Loading';
+import { canManageMenu, canViewOverview, getRedirectPathByRole } from '../utils/auth';
 
 const Dashboard = () => {
     const location = useLocation();
+    const navigate = useNavigate();
+    const { role, loading: authLoading } = useAuth();
     const activeSection = useCurrentSection();
     const [activeInventoryTab, setActiveInventoryTab] = useState('ingredients');
     const [activeMenuTab, setActiveMenuTab] = useState('items');
@@ -44,91 +51,96 @@ const Dashboard = () => {
         setIsReportModalVisible(true);
     };
 
+    // Modal state mapping
+    const modalStateMap = {
+        ingredient: setIsAddIngredientModalVisible,
+        dish: setIsAddDishModalVisible,
+        inventory: setIsInventoryCheckModalVisible,
+        report: setIsReportModalVisible
+    };
+
     const handleModalOk = async (modalType) => {
         try {
             setLoading(true);
-            const values = await form.validateFields();
-            console.log('Form values:', values);
+            await form.validateFields();
 
             // TODO: API calls here
             await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
 
             // Close modal and reset form
-            switch (modalType) {
-                case 'ingredient':
-                    setIsAddIngredientModalVisible(false);
-                    // TODO: Refresh ingredients data when API is implemented
-                    break;
-                case 'dish':
-                    setIsAddDishModalVisible(false);
-                    // TODO: Refresh menu items data when API is implemented
-                    break;
-                case 'inventory':
-                    setIsInventoryCheckModalVisible(false);
-                    // TODO: Refresh inventory data when API is implemented
-                    break;
-                case 'report':
-                    setIsReportModalVisible(false);
-                    // TODO: Refresh reports data when API is implemented
-                    break;
+            const setModalVisible = modalStateMap[modalType];
+            if (setModalVisible) {
+                setModalVisible(false);
             }
             form.resetFields();
         } catch (error) {
-            console.error('Validation failed:', error);
+            // Silently handle validation errors (form will show validation messages)
+            if (process.env.NODE_ENV === 'development') {
+                console.error('Form validation failed:', error);
+            }
         } finally {
             setLoading(false);
         }
     };
 
     const handleModalCancel = (modalType) => {
-        switch (modalType) {
-            case 'ingredient':
-                setIsAddIngredientModalVisible(false);
-                break;
-            case 'dish':
-                setIsAddDishModalVisible(false);
-                break;
-            case 'inventory':
-                setIsInventoryCheckModalVisible(false);
-                break;
-            case 'report':
-                setIsReportModalVisible(false);
-                break;
+        const setModalVisible = modalStateMap[modalType];
+        if (setModalVisible) {
+            setModalVisible(false);
         }
         form.resetFields();
     };
 
     const handleQuickAction = (actionKey) => {
-        switch (actionKey) {
-            case 'add-ingredient':
-                setIsAddIngredientModalVisible(true);
-                break;
-            case 'add-dish':
-                setIsAddDishModalVisible(true);
-                break;
-            case 'inventory-check':
-                setIsInventoryCheckModalVisible(true);
-                break;
-            case 'create-report':
-                setIsReportModalVisible(true);
-                break;
-            default:
-                console.log('Unknown action:', actionKey);
+        const actionMap = {
+            'add-ingredient': () => setIsAddIngredientModalVisible(true),
+            'add-dish': () => setIsAddDishModalVisible(true),
+            'inventory-check': () => setIsInventoryCheckModalVisible(true),
+            'create-report': () => setIsReportModalVisible(true)
+        };
+
+        const action = actionMap[actionKey];
+        if (action) {
+            action();
         }
     };
 
-    // Get current section from URL
-    const getCurrentSection = () => {
-        const path = location.pathname;
-        if (path.includes('inventory')) return 'inventory';
-        if (path.includes('menu')) return 'menu';
-        if (path.includes('orders')) return 'orders';
-        if (path.includes('staff')) return 'staff';
-        if (path.includes('settings')) return 'settings';
-        return 'overview';
-    };
+    // Get current section from URL (using hook)
+    const currentSection = useCurrentSection();
 
-    const currentSection = getCurrentSection();
+    // Check if user has permission to view overview
+    const hasOverviewPermission = canViewOverview(role);
+
+    // Redirect non-managers away from overview to appropriate page based on role
+    useEffect(() => {
+        if (!authLoading && currentSection === 'overview' && !hasOverviewPermission) {
+            // Redirect to appropriate page based on role
+            const redirectPath = getRedirectPathByRole(role);
+            navigate(redirectPath, { replace: true });
+        }
+    }, [authLoading, currentSection, hasOverviewPermission, role, navigate]);
+
+    // Show loading while checking auth
+    if (authLoading) {
+        return <Loading tip="Đang kiểm tra quyền truy cập..." />;
+    }
+
+    // Show 403 error if trying to access overview without permission (fallback, should be redirected)
+    if (currentSection === 'overview' && !hasOverviewPermission) {
+        return (
+            <ErrorPage
+                status={403}
+                title="403 - Không có quyền truy cập"
+                subTitle="Chỉ quản lý nhà hàng mới có thể xem Dashboard tổng quan. Vui lòng sử dụng các chức năng khác."
+                showHomeButton={false}
+                showReloadButton={false}
+                onBack={() => {
+                    const redirectPath = getRedirectPathByRole(role);
+                    navigate(redirectPath);
+                }}
+            />
+        );
+    }
 
     // Stats and alerts are now loaded from useDashboardStats and useAlerts hooks
     // No more mock data needed
@@ -177,24 +189,29 @@ const Dashboard = () => {
                     </div>
                 );
             case 'menu':
-                return (
-                    <div>
-                        <div style={{ marginBottom: '16px' }}>
-                            <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0, color: '#262626' }}>
-                                Quản lý Menu
-                            </h2>
-                            <p style={{ color: '#8c8c8c', margin: '8px 0 0 0', fontSize: '14px' }}>
-                                Quản lý món ăn, danh mục và combo
-                            </p>
+                // Show MenuView for customers, MenuManagement for staff/managers
+                if (canManageMenu(role)) {
+                    return (
+                        <div>
+                            <div style={{ marginBottom: '16px' }}>
+                                <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0, color: '#262626' }}>
+                                    Quản lý Menu
+                                </h2>
+                                <p style={{ color: '#8c8c8c', margin: '8px 0 0 0', fontSize: '14px' }}>
+                                    Quản lý món ăn, danh mục và combo
+                                </p>
+                            </div>
+                            <Tabs
+                                activeKey={activeMenuTab}
+                                onChange={setActiveMenuTab}
+                                items={menuTabs}
+                                size="large"
+                            />
                         </div>
-                        <Tabs
-                            activeKey={activeMenuTab}
-                            onChange={setActiveMenuTab}
-                            items={menuTabs}
-                            size="large"
-                        />
-                    </div>
-                );
+                    );
+                } else {
+                    return <MenuView />;
+                }
             case 'orders':
                 return (
                     <div>

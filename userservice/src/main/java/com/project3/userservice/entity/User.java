@@ -81,10 +81,11 @@ public class User {
     }
 
     public enum UserRole {
-        CUSTOMER,    // Khách hàng
-        STAFF,       // Nhân viên
-        MANAGER,     // Quản lý
-        ADMIN        // Quản trị viên
+        CUSTOMER,           // Khách hàng
+        STAFF,              // Nhân viên phục vụ
+        WAREHOUSE_STAFF,    // Nhân viên kho
+        RESTAURANT_MANAGER, // Quản lý nhà hàng
+        ADMIN               // Quản trị viên hệ thống
     }
 
     public enum UserStatus {

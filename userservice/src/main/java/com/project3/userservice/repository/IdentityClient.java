@@ -4,6 +4,7 @@ import com.project3.userservice.dto.identity.TokenExchangeRequest;
 import com.project3.userservice.dto.identity.TokenExchangeResponse;
 import com.project3.userservice.dto.identity.UserCreationRequest;
 import com.project3.userservice.dto.identity.UserLoginRequest;
+import com.project3.userservice.dto.identity.PasswordResetRequest;
 import feign.QueryMap;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.MediaType;
@@ -89,4 +90,31 @@ public interface IdentityClient {
             @RequestParam(value = "client_id", required = false) String clientId,
             @RequestParam(value = "redirect_uri", required = false) String redirectUri,
             @RequestBody java.util.List<String> actions);
+
+    @PutMapping(
+            value = "{path}/users/{userId}/reset-password",
+            consumes = MediaType.APPLICATION_JSON_VALUE
+    )
+    ResponseEntity<Void> resetPassword(
+            @PathVariable("path") String path,
+            @PathVariable("userId") String userId,
+            @RequestBody PasswordResetRequest request,
+            @RequestHeader("Authorization") String authorization);
+    
+    @PutMapping(
+            value = "{path}",
+            consumes = MediaType.APPLICATION_JSON_VALUE
+    )
+    ResponseEntity<Void> updateRealm(
+            @PathVariable("path") String path,
+            @RequestBody java.util.Map<String, Object> realmConfig,
+            @RequestHeader("Authorization") String authorization);
+    
+    @GetMapping(
+            value = "{path}",
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    java.util.Map<String, Object> getRealm(
+            @PathVariable("path") String path,
+            @RequestHeader("Authorization") String authorization);
 }

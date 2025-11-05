@@ -1,5 +1,11 @@
 // API Configuration
 export const API_BASE_URL = 'http://localhost:8080';
+export const IDP = {
+    URL: 'http://localhost:8180',
+    REALM: 'project3',
+    CLIENT_ID: 'project3',
+    CALLBACK_PATH: '/auth/callback',
+};
 
 // Restaurant Information
 export const RESTAURANT_INFO = {

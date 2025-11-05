@@ -22,7 +22,7 @@ class CloudinaryService {
     /**
      * Upload image to Cloudinary
      */
-    async uploadImage(file) {
+    async uploadImage(file, folder = 'restaurant-menu') {
         try {
             // Get signature from backend
             const signature = await this.getSignature();
@@ -38,7 +38,7 @@ class CloudinaryService {
             formData.append('api_key', signature.apiKey);
             formData.append('timestamp', signature.timestamp);
             formData.append('signature', signature.signature);
-            formData.append('folder', 'restaurant-menu');
+            formData.append('folder', folder);
 
             // Upload to Cloudinary
             const response = await axios.post(CLOUDINARY_URL, formData, {
@@ -57,6 +57,10 @@ class CloudinaryService {
             console.error('Error details:', JSON.stringify(error.response?.data, null, 2));
             throw error;
         }
+    }
+
+    async uploadUserAvatar(file) {
+        return this.uploadImage(file, 'restaurant-users');
     }
 }
 

@@ -14,4 +14,6 @@ public class TokenExchangeRequest {
     private String client_id;
     private String client_secret;
     private String scope;
+    private String code;          // for authorization_code
+    private String redirect_uri;  // for authorization_code
 }

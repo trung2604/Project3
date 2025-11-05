@@ -1,12 +1,37 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Input, Space, Tag, App, Modal, Form } from 'antd';
 import { ReloadOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { menuService } from '../services/menuService';
+import { canManageMenu } from '../utils/auth';
+import { useAuth } from '../context/AuthContext';
+import Loading from '../components/Common/Loading';
+import ErrorPage from '../components/Common/ErrorPage';
 
 const { Search } = Input;
 
 const MenuCategories = () => {
     const { message } = App.useApp();
+    const { role, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
+
+    // Check permission
+    if (authLoading) {
+        return <Loading tip="Đang kiểm tra quyền truy cập..." />;
+    }
+
+    if (!canManageMenu(role)) {
+        return (
+            <ErrorPage
+                status={403}
+                title="403 - Không có quyền truy cập"
+                subTitle="Chỉ nhân viên, quản lý nhà hàng và quản trị viên mới có thể quản lý danh mục."
+                showHomeButton={false}
+                showReloadButton={false}
+                onBack={() => navigate('/dashboard/menu')}
+            />
+        );
+    }
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);

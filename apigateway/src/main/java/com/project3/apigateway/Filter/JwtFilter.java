@@ -12,9 +12,27 @@ import org.springframework.web.server.ServerWebExchange;
 @Component
 public class JwtFilter extends AbstractGatewayFilterFactory<JwtFilter.Config> {
 
+    public JwtFilter() {
+        super(Config.class);
+    }
+
     @Override
-    public GatewayFilter apply(JwtFilter.Config config) {
+    public String name() {
+        return "jwt";
+    }
+
+    @Override
+    public GatewayFilter apply(Config config) {
         return (exchange, chain) -> {
+            String path = exchange.getRequest().getURI().getPath();
+            
+            // Skip JWT processing for OAuth endpoints (no JWT token yet)
+            if (path.contains("/oauth/token-exchange") || 
+                path.equals("/api/users/login") || 
+                path.equals("/api/users/register")) {
+                return chain.filter(exchange);
+            }
+            
             return exchange.getPrincipal()
                     .cast(JwtAuthenticationToken.class)
                     .flatMap(jwtToken -> {
@@ -48,5 +66,6 @@ public class JwtFilter extends AbstractGatewayFilterFactory<JwtFilter.Config> {
         };
     }
 
-    static class Config {}
+    public static class Config {
+    }
 }

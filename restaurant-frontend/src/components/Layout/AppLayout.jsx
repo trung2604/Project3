@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Layout, Avatar, Dropdown, Badge, Drawer, Button } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Layout, Avatar, Dropdown, Badge, Drawer, Button, App } from 'antd';
 import {
     HomeOutlined,
     InboxOutlined,
@@ -18,12 +18,31 @@ import {
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { RESTAURANT_INFO } from '../../constants.js';
+import { getMenuItemsByRole } from '../../utils/auth';
+import { useAuth } from '../../context/AuthContext';
+import { buildKeycloakLogoutUrl } from '../../utils/keycloak';
+import { IDP } from '../../constants';
 
 const { Header, Content } = Layout;
+
+const iconMap = {
+    home: <HomeOutlined />,
+    menu: <MenuOutlined />,
+    shopping: <ShoppingOutlined />,
+    inbox: <InboxOutlined />,
+    warning: <WarningOutlined />,
+    history: <HistoryOutlined />,
+    appstore: <AppstoreOutlined />,
+    'appstore-add': <AppstoreAddOutlined />,
+    team: <TeamOutlined />,
+    setting: <SettingOutlined />,
+};
 
 const AppLayout = ({ children }) => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { user, role, logout } = useAuth();
+    const { modal } = App.useApp();
     const [mobileMenuVisible, setMobileMenuVisible] = useState(false);
 
     // Get current section from URL or default to overview
@@ -43,24 +62,19 @@ const AppLayout = ({ children }) => {
 
     const currentSection = getCurrentSection();
 
-    const sidebarIcons = [
-        { icon: <HomeOutlined />, key: 'overview', active: currentSection === 'overview', label: 'Tổng quan' },
-        { icon: <InboxOutlined />, key: 'inventory', active: currentSection === 'inventory', label: 'Quản lý kho' },
-        { icon: <WarningOutlined />, key: 'inventory-alerts', active: currentSection === 'inventory-alerts', label: 'Cảnh báo kho' },
-        { icon: <HistoryOutlined />, key: 'inventory-transactions', active: currentSection === 'inventory-transactions', label: 'Lịch sử giao dịch' },
-        { icon: <MenuOutlined />, key: 'menu', active: currentSection === 'menu', label: 'Thực đơn' },
-        { icon: <AppstoreOutlined />, key: 'menu-categories', active: currentSection === 'menu-categories', label: 'Danh mục' },
-        { icon: <AppstoreAddOutlined />, key: 'menu-combos', active: currentSection === 'menu-combos', label: 'Combo' },
-        { icon: <ShoppingOutlined />, key: 'orders', active: currentSection === 'orders', label: 'Đơn hàng' },
-        { icon: <TeamOutlined />, key: 'staff', active: currentSection === 'staff', label: 'Nhân viên' },
-        { icon: <SettingOutlined />, key: 'settings', active: currentSection === 'settings', label: 'Cài đặt' },
-    ];
+    // Get menu items based on user role
+    const menuItems = getMenuItemsByRole(role || 'CUSTOMER');
+    const sidebarIcons = menuItems.map(item => ({
+        icon: iconMap[item.icon] || <HomeOutlined />,
+        key: item.key,
+        active: currentSection === item.key,
+        label: item.label
+    }));
 
     const userMenuItems = [
         { key: 'profile', icon: <UserOutlined />, label: 'Thông tin cá nhân' },
-        { key: 'settings', icon: <SettingOutlined />, label: 'Cài đặt' },
         { type: 'divider' },
-        { key: 'logout', icon: <LogoutOutlined />, label: 'Đăng xuất' },
+        { key: 'logout', icon: <LogoutOutlined />, label: 'Đăng xuất', danger: true },
     ];
 
     const handleIconClick = (key) => {
@@ -77,20 +91,44 @@ const AppLayout = ({ children }) => {
         } else {
             navigate(`/dashboard/${key}`);
         }
-        // Close mobile menu after navigation
         setMobileMenuVisible(false);
     };
 
     const handleUserMenuClick = ({ key }) => {
         if (key === 'logout') {
-            // TODO: Implement logout when authentication is implemented
-            // localStorage.removeItem('authToken');
-            // navigate('/login');
-            console.log('Logout clicked - Authentication not implemented yet');
-        } else {
-            navigate(`/${key}`);
+            modal.confirm({
+                title: 'Xác nhận đăng xuất',
+                content: 'Bạn có chắc chắn muốn đăng xuất không?',
+                okText: 'Đăng xuất',
+                cancelText: 'Hủy',
+                okType: 'danger',
+                onOk: () => {
+                    logout();
+                    // Redirect to Keycloak logout to clear session, then redirect back to landing page
+                    const logoutRedirectUri = `${window.location.origin}/`;
+                    const keycloakLogoutUrl = buildKeycloakLogoutUrl(logoutRedirectUri);
+                    window.location.href = keycloakLogoutUrl;
+                }
+            });
+        } else if (key === 'profile') {
+            navigate('/dashboard/profile');
         }
     };
+
+    const getRoleLabel = (role) => {
+        const roleMap = {
+            'ADMIN': 'Quản trị viên',
+            'RESTAURANT_MANAGER': 'Quản lý nhà hàng',
+            'WAREHOUSE_STAFF': 'Nhân viên kho',
+            'STAFF': 'Nhân viên',
+            'CUSTOMER': 'Khách hàng'
+        };
+        return roleMap[role] || 'Khách hàng';
+    };
+
+    const userName = user?.firstName && user?.lastName
+        ? `${user.firstName} ${user.lastName}`
+        : user?.username || 'User';
 
     return (
         <Layout>
@@ -125,8 +163,8 @@ const AppLayout = ({ children }) => {
                             <BellOutlined className="notification-icon" />
                         </Badge>
                         <div className="user-info-text">
-                            <div className="user-name">Đỗ Đình Trung</div>
-                            <div className="user-role">Quản lý nhà hàng</div>
+                            <div className="user-name">{userName}</div>
+                            <div className="user-role">{getRoleLabel(role)}</div>
                         </div>
                         <Dropdown
                             menu={{ items: userMenuItems, onClick: handleUserMenuClick }}
@@ -135,7 +173,8 @@ const AppLayout = ({ children }) => {
                         >
                             <Avatar
                                 size={40}
-                                icon={<UserOutlined />}
+                                src={user?.avatarUrl}
+                                icon={!user?.avatarUrl && <UserOutlined />}
                                 className="user-avatar"
                                 style={{ backgroundColor: '#ff6b35', cursor: 'pointer' }}
                             />

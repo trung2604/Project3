@@ -24,14 +24,39 @@ import {
     SearchOutlined,
     BellOutlined
 } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { inventoryService } from '../services/inventoryService';
 import { PAGINATION } from '../constants.js';
+import { canManageInventory } from '../utils/auth';
+import { useAuth } from '../context/AuthContext';
+import Loading from '../components/Common/Loading';
+import ErrorPage from '../components/Common/ErrorPage';
 
 const { Option } = Select;
 const { Search } = Input;
 
 const InventoryAlerts = () => {
     const { message } = App.useApp();
+    const { role, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
+
+    // Check permission
+    if (authLoading) {
+        return <Loading tip="Đang kiểm tra quyền truy cập..." />;
+    }
+
+    if (!canManageInventory(role)) {
+        return (
+            <ErrorPage
+                status={403}
+                title="403 - Không có quyền truy cập"
+                subTitle="Chỉ nhân viên kho, quản lý nhà hàng và quản trị viên mới có thể xem cảnh báo kho."
+                showHomeButton={false}
+                showReloadButton={false}
+                onBack={() => navigate('/dashboard')}
+            />
+        );
+    }
     const [alerts, setAlerts] = useState([]);
     const [lowStockAlerts, setLowStockAlerts] = useState([]);
     const [expiryAlerts, setExpiryAlerts] = useState([]);

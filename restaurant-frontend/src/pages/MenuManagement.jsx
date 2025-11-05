@@ -32,10 +32,15 @@ import {
     SettingOutlined,
     UploadOutlined
 } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { menuService } from '../services/menuService';
 import { inventoryService } from '../services/inventoryService';
 import { cloudinaryService } from '../services/cloudinaryService';
 import { PAGINATION } from '../constants.js';
+import { canManageMenu } from '../utils/auth';
+import { useAuth } from '../context/AuthContext';
+import Loading from '../components/Common/Loading';
+import ErrorPage from '../components/Common/ErrorPage';
 
 const { Option } = Select;
 const { Search } = Input;
@@ -43,6 +48,26 @@ const { TextArea } = Input;
 
 const MenuManagement = () => {
     const { message } = App.useApp();
+    const { role, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
+
+    // Check permission
+    if (authLoading) {
+        return <Loading tip="Đang kiểm tra quyền truy cập..." />;
+    }
+
+    if (!canManageMenu(role)) {
+        return (
+            <ErrorPage
+                status={403}
+                title="403 - Không có quyền truy cập"
+                subTitle="Chỉ nhân viên, quản lý nhà hàng và quản trị viên mới có thể quản lý thực đơn."
+                showHomeButton={false}
+                showReloadButton={false}
+                onBack={() => navigate('/dashboard/menu')}
+            />
+        );
+    }
     const [menuItems, setMenuItems] = useState([]);
     const [categories, setCategories] = useState([]);
     const [ingredients, setIngredients] = useState([]);

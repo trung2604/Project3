@@ -6,6 +6,10 @@ import com.project3.userservice.dto.RegisterUserRequestDTO;
 import com.project3.userservice.dto.LoginResponseDTO;
 import com.project3.userservice.dto.PagedUserResponseDTO;
 import com.project3.userservice.dto.UpdateUserRequestDTO;
+import com.project3.userservice.dto.UpdateAvatarRequestDTO;
+import com.project3.userservice.dto.ChangePasswordRequestDTO;
+import com.project3.userservice.dto.identity.OAuthCodeExchangeRequest;
+import com.project3.userservice.dto.identity.TokenExchangeResponse;
 import com.project3.userservice.dto.UserResponseDTO;
 import com.project3.userservice.entity.User;
 
@@ -20,4 +24,8 @@ public interface IUserService {
     PagedUserResponseDTO getAllUsers(Integer page, Integer size, String search, User.UserRole role, User.UserStatus status);
     UserResponseDTO toggleUserStatus(String userId, User.UserStatus status);
     UserResponseDTO syncEmailVerification(String userId);
+    UserResponseDTO updateUserAvatar(String userId, UpdateAvatarRequestDTO request);
+    UserResponseDTO updateMyProfile(String userId, UpdateUserRequestDTO request);
+    void changeMyPassword(String userId, ChangePasswordRequestDTO request);
+    TokenExchangeResponse exchangeAuthorizationCode(OAuthCodeExchangeRequest request);
 }

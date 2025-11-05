@@ -26,8 +26,13 @@ import {
     EyeOutlined,
     DownloadOutlined
 } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import { inventoryService } from '../services/inventoryService';
 import { PAGINATION, TRANSACTION_TYPES } from '../constants.js';
+import { canManageInventory } from '../utils/auth';
+import { useAuth } from '../context/AuthContext';
+import Loading from '../components/Common/Loading';
+import ErrorPage from '../components/Common/ErrorPage';
 
 const { Option } = Select;
 const { Search } = Input;
@@ -35,6 +40,26 @@ const { RangePicker } = DatePicker;
 
 const InventoryTransactions = () => {
     const { message } = App.useApp();
+    const { role, loading: authLoading } = useAuth();
+    const navigate = useNavigate();
+
+    // Check permission
+    if (authLoading) {
+        return <Loading tip="Đang kiểm tra quyền truy cập..." />;
+    }
+
+    if (!canManageInventory(role)) {
+        return (
+            <ErrorPage
+                status={403}
+                title="403 - Không có quyền truy cập"
+                subTitle="Chỉ nhân viên kho, quản lý nhà hàng và quản trị viên mới có thể xem lịch sử giao dịch kho."
+                showHomeButton={false}
+                showReloadButton={false}
+                onBack={() => navigate('/dashboard')}
+            />
+        );
+    }
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(false);
     const [pagination, setPagination] = useState({

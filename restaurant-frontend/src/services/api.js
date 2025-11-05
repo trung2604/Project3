@@ -11,13 +11,13 @@ const apiClient = axios.create({
 });
 
 // Request interceptor
+// Note: API Gateway will decode JWT and add X-User-Id header automatically
 apiClient.interceptors.request.use(
     (config) => {
-        // TODO: Add auth token when API Gateway implements token generation
-        // const token = localStorage.getItem('authToken');
-        // if (token) {
-        //     config.headers.Authorization = `Bearer ${token}`;
-        // }
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
         return config;
     },
     (error) => {
@@ -33,15 +33,16 @@ apiClient.interceptors.response.use(
     (error) => {
         // Enhanced error handling
         if (error.response?.status === 401) {
-            // TODO: Handle unauthorized access when authentication is implemented
-            // localStorage.removeItem('authToken');
-            // window.location.href = '/login';
-            console.error('401 Unauthorized - Authentication not implemented yet');
+            // Clear auth data on unauthorized
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('user');
+            console.error('401 Unauthorized - Session expired');
         } else if (error.response?.status === 403) {
-            console.error('403 Forbidden - Check if services are running and accessible');
+            console.error('403 Forbidden - Insufficient permissions');
             console.error('Error details:', error.response?.data);
         } else if (error.response?.status === 404) {
-            console.error('404 Not Found - Check API endpoints and service availability');
+            console.error('404 Not Found - Resource not found');
             console.error('Requested URL:', error.config?.url);
         } else if (error.code === 'ERR_NETWORK') {
             console.error('Network Error - Check if API Gateway and services are running');

@@ -205,6 +205,114 @@ public class UserController {
         }
     }
 
+    @PostMapping("/oauth/token-exchange")
+    public ResponseEntity<ApiResponseDTO<LoginResponseDTO>> exchangeCode(
+            @RequestBody com.project3.userservice.dto.identity.OAuthCodeExchangeRequest request,
+            HttpServletRequest httpRequest) {
+        try {
+            var token = userService.exchangeAuthorizationCode(request);
+            LoginResponseDTO response = new LoginResponseDTO();
+            response.setAccessToken(token.getAccessToken());
+            response.setRefreshToken(token.getRefreshToken() != null ? token.getRefreshToken() : token.getIdToken());
+            response.setTokenType(token.getTokenType());
+            response.setExpiresIn(Long.parseLong(token.getExpiresIn()));
+            response.setRefreshExpiresIn(token.getRefreshExpiresIn() != null ? Long.parseLong(token.getRefreshExpiresIn()) : 1800L);
+            return ResponseEntity.ok(ApiResponseDTO.success(response, "Token exchanged successfully"));
+        } catch (RuntimeException e) {
+            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
+                    e.getMessage() != null ? e.getMessage() : "Failed to exchange code",
+                    httpRequest.getRequestURI()
+            );
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+        }
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponseDTO<UserResponseDTO>> getCurrentUser(
+            @RequestHeader(value = "X-User-Id", required = false) String userIdHeader,
+            HttpServletRequest httpRequest) {
+        try {
+            String userId = userIdHeader;
+            if (userId == null || userId.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(new ApiResponseDTO<>(false, "Missing X-User-Id header", null, 401));
+            }
+            UserResponseDTO user = userService.getUserById(userId);
+            return ResponseEntity.ok(ApiResponseDTO.success(user, "User retrieved successfully"));
+        } catch (RuntimeException e) {
+            ErrorResponseDTO error = ErrorResponseDTO.notFound(
+                    e.getMessage() != null ? e.getMessage() : "User not found",
+                    httpRequest.getRequestURI()
+            );
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+        }
+    }
+
+    @PutMapping("/me")
+    public ResponseEntity<ApiResponseDTO<UserResponseDTO>> updateMyProfile(
+            @Valid @RequestBody UpdateUserRequestDTO request,
+            HttpServletRequest httpRequest,
+            @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
+        try {
+            String userId = userIdHeader;
+            if (userId == null || userId.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(new ApiResponseDTO<>(false, "Missing X-User-Id header", null, 401));
+            }
+            UserResponseDTO user = userService.updateMyProfile(userId, request);
+            return ResponseEntity.ok(ApiResponseDTO.success(user, "Profile updated successfully"));
+        } catch (RuntimeException e) {
+            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
+                    e.getMessage() != null ? e.getMessage() : "Failed to update profile",
+                    httpRequest.getRequestURI()
+            );
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+        }
+    }
+
+    @PatchMapping("/me/password")
+    public ResponseEntity<ApiResponseDTO<Void>> changeMyPassword(
+            @Valid @RequestBody ChangePasswordRequestDTO request,
+            HttpServletRequest httpRequest,
+            @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
+        try {
+            String userId = userIdHeader;
+            if (userId == null || userId.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(new ApiResponseDTO<>(false, "Missing X-User-Id header", null, 401));
+            }
+            userService.changeMyPassword(userId, request);
+            return ResponseEntity.ok(ApiResponseDTO.success(null, "Password changed successfully"));
+        } catch (RuntimeException e) {
+            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
+                    e.getMessage() != null ? e.getMessage() : "Failed to change password",
+                    httpRequest.getRequestURI()
+            );
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+        }
+    }
+    @PatchMapping("/{userId}/avatar")
+    public ResponseEntity<ApiResponseDTO<UserResponseDTO>> updateAvatar(
+            @PathVariable String userId,
+            @Valid @RequestBody UpdateAvatarRequestDTO request,
+            HttpServletRequest httpRequest) {
+        try {
+            UserResponseDTO user = userService.updateUserAvatar(userId, request);
+            return ResponseEntity.ok(ApiResponseDTO.success(user, "Avatar updated successfully"));
+        } catch (RuntimeException e) {
+            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
+                    e.getMessage() != null ? e.getMessage() : "Failed to update avatar",
+                    httpRequest.getRequestURI()
+            );
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+        }
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponseDTO<Map<String, String>>> handleValidationExceptions(
             MethodArgumentNotValidException ex,

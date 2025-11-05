@@ -34,6 +34,9 @@ public class UserCreationRequest {
     @JsonProperty("attributes")
     private Map<String, List<String>> attributes;
     
+    @JsonProperty("requiredActions")
+    private List<String> requiredActions;
+    
     public void setPassword(String password) {
         if (password != null && !password.isEmpty()) {
             if (credentials == null) {

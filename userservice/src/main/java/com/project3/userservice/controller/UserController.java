@@ -47,6 +47,24 @@ public class UserController {
         }
     }
 
+    @PostMapping("/register")
+    public ResponseEntity<ApiResponseDTO<UserResponseDTO>> register(
+            @Valid @RequestBody RegisterUserRequestDTO request,
+            HttpServletRequest httpRequest) {
+        try {
+            UserResponseDTO user = userService.registerUser(request);
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ApiResponseDTO.created(user, "User registered successfully"));
+        } catch (RuntimeException e) {
+            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
+                    e.getMessage() != null ? e.getMessage() : "Failed to register user",
+                    httpRequest.getRequestURI()
+            );
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+        }
+    }
+
     @PostMapping
     public ResponseEntity<ApiResponseDTO<UserResponseDTO>> createUser(
             @Valid @RequestBody CreateUserRequestDTO request,
@@ -64,6 +82,7 @@ public class UserController {
                     .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
         }
     }
+
 
     @PutMapping("/{userId}")
     public ResponseEntity<ApiResponseDTO<UserResponseDTO>> updateUser(
@@ -165,6 +184,23 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+        }
+    }
+
+    @PostMapping("/{userId}/verify-email")
+    public ResponseEntity<ApiResponseDTO<UserResponseDTO>> verifyEmail(
+            @PathVariable String userId,
+            HttpServletRequest httpRequest) {
+        try {
+            UserResponseDTO user = userService.syncEmailVerification(userId);
+            return ResponseEntity.ok(ApiResponseDTO.success(user, "Email verified successfully. Account activated."));
+        } catch (RuntimeException e) {
+            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
+                    e.getMessage() != null ? e.getMessage() : "Failed to verify email",
+                    httpRequest.getRequestURI()
+            );
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
         }
     }

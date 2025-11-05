@@ -46,4 +46,47 @@ public interface IdentityClient {
             @PathVariable("userId") String userId,
             @RequestBody UserCreationRequest request,
             @RequestHeader("Authorization") String authorization);
+
+    @DeleteMapping(
+            value = "{path}/users/{userId}"
+    )
+    ResponseEntity<Void> deleteUser(
+            @PathVariable("path") String path,
+            @PathVariable("userId") String userId,
+            @RequestHeader("Authorization") String authorization);
+
+    // Removed email verify execution methods to use custom userservice flow
+
+    @GetMapping(
+            value = "{path}/users/{userId}",
+            produces = MediaType.APPLICATION_JSON_VALUE
+    )
+    java.util.Map<String, Object> getUser(
+            @PathVariable("path") String path,
+            @PathVariable("userId") String userId,
+            @RequestHeader("Authorization") String authorization);
+
+    @PutMapping(
+            value = "{path}/users/{userId}/execute-actions-email",
+            consumes = MediaType.APPLICATION_JSON_VALUE
+    )
+    ResponseEntity<Void> executeActionsEmail(
+            @PathVariable("path") String path,
+            @PathVariable("userId") String userId,
+            @RequestHeader("Authorization") String authorization,
+            @RequestParam(value = "client_id", required = false) String clientId,
+            @RequestParam(value = "redirect_uri", required = false) String redirectUri,
+            @RequestBody java.util.List<String> actions);
+    
+    @PostMapping(
+            value = "{path}/users/{userId}/execute-actions-email",
+            consumes = MediaType.APPLICATION_JSON_VALUE
+    )
+    ResponseEntity<Void> executeActionsEmailPost(
+            @PathVariable("path") String path,
+            @PathVariable("userId") String userId,
+            @RequestHeader("Authorization") String authorization,
+            @RequestParam(value = "client_id", required = false) String clientId,
+            @RequestParam(value = "redirect_uri", required = false) String redirectUri,
+            @RequestBody java.util.List<String> actions);
 }

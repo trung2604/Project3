@@ -4,6 +4,7 @@ import com.project3.userservice.dto.CreateUserRequestDTO;
 import com.project3.userservice.dto.LoginRequestDTO;
 import com.project3.userservice.dto.LoginResponseDTO;
 import com.project3.userservice.dto.PagedUserResponseDTO;
+import com.project3.userservice.dto.RegisterUserRequestDTO;
 import com.project3.userservice.dto.UpdateUserRequestDTO;
 import com.project3.userservice.dto.UserResponseDTO;
 import com.project3.userservice.dto.identity.TokenExchangeRequest;
@@ -42,6 +43,8 @@ public class UserServiceImpl implements IUserService {
     @Autowired
     private CloudinaryService cloudinaryService;
 
+    // Removed custom email verification components
+
     @Value("${idp.client-id}")
     @NonFinal
     private String clientId;
@@ -73,11 +76,8 @@ public class UserServiceImpl implements IUserService {
         }
         
         log.info("User found in database. Status: {}", user.getStatus());
-        if (user.getStatus() != User.UserStatus.ACTIVE) {
-            log.warn("Login attempt for inactive user: {}. Status: {}", request.getUsername(), user.getStatus());
-            throw new RuntimeException("User account is not active. Current status: " + user.getStatus());
-        }
         
+        // Try to authenticate with Keycloak first
         TokenExchangeResponse tokenResponse = authenticateUserWithKeycloak(
                 request.getUsername(), request.getPassword());
         
@@ -85,8 +85,63 @@ public class UserServiceImpl implements IUserService {
             throw new RuntimeException("Invalid username or password. Please verify your credentials or contact administrator if account is inactive.");
         }
 
+        // If user is INACTIVE, check if email is verified in Keycloak
+        if (user.getStatus() != User.UserStatus.ACTIVE) {
+            try {
+                KeycloakAdminInfo adminInfo = getKeycloakAdminInfo();
+                if (adminInfo != null && adminInfo.token != null && adminInfo.adminPath != null) {
+                    var kcUser = identityClient.getUser(adminInfo.adminPath, user.getUserId(),
+                            "Bearer " + adminInfo.token.getAccessToken());
+                    Object emailVerifiedObj = kcUser.get("emailVerified");
+                    Boolean emailVerified = emailVerifiedObj instanceof Boolean ? (Boolean) emailVerifiedObj : 
+                                           (emailVerifiedObj instanceof String && "true".equalsIgnoreCase(emailVerifiedObj.toString()));
+                    
+                    if (Boolean.TRUE.equals(emailVerified)) {
+                        log.info("Email verified in Keycloak for user: {}. Activating user.", request.getUsername());
+                        user.setStatus(User.UserStatus.ACTIVE);
+                        userRepository.save(user);
+                        // Also enable user in Keycloak if not already enabled
+                        Object enabledObj = kcUser.get("enabled");
+                        Boolean enabled = enabledObj instanceof Boolean ? (Boolean) enabledObj : 
+                                         (enabledObj instanceof String && "true".equalsIgnoreCase(enabledObj.toString()));
+                        if (!Boolean.TRUE.equals(enabled)) {
+                            enableUserInKeycloak(user.getUserId());
+                        }
+                    } else {
+                        log.warn("Login attempt for inactive user with unverified email: {}. Status: {}", request.getUsername(), user.getStatus());
+                        throw new RuntimeException("User account is not active. Please verify your email before logging in.");
+                    }
+                } else {
+                    log.warn("Cannot check email verification status. User status: {}", user.getStatus());
+                    throw new RuntimeException("User account is not active. Please verify your email.");
+                }
+            } catch (Exception e) {
+                log.error("Failed to check email verification status: {}", e.getMessage());
+                throw new RuntimeException("User account is not active. Please verify your email.");
+            }
+        }
+
         LoginResponseDTO response = buildLoginResponse(tokenResponse, user);
         return response;
+    }
+
+    @Override
+    public UserResponseDTO registerUser(RegisterUserRequestDTO request) {
+        CreateUserRequestDTO createDto = new CreateUserRequestDTO();
+        createDto.setEmail(request.getEmail());
+        createDto.setUsername(request.getUsername());
+        createDto.setPassword(request.getPassword());
+        createDto.setFirstName(request.getFirstName());
+        createDto.setLastName(request.getLastName());
+        createDto.setPhone(request.getPhone());
+        createDto.setAddress(request.getAddress());
+        createDto.setAvatarUrl(request.getAvatarUrl());
+        createDto.setAvatarPublicId(request.getAvatarPublicId());
+        createDto.setDateOfBirth(request.getDateOfBirth());
+        // Always assign CUSTOMER role for self-registered users
+        createDto.setRole(User.UserRole.CUSTOMER);
+
+        return createUser(createDto);
     }
 
     @Override
@@ -138,6 +193,8 @@ public class UserServiceImpl implements IUserService {
         User user = buildUserEntity(userId, request);
 
         User savedUser = userRepository.save(user);
+        // Trigger Keycloak to send verification email
+        sendKeycloakVerifyEmail(savedUser.getUserId(), savedUser.getEmail());
         return UserResponseDTO.fromEntity(savedUser);
     }
 
@@ -151,6 +208,10 @@ public class UserServiceImpl implements IUserService {
                 throw new RuntimeException("Email already exists: " + request.getEmail());
             }
             user.setEmail(request.getEmail());
+            // If email changed and user inactive, trigger Keycloak verify email again
+            if (user.getStatus() != User.UserStatus.ACTIVE) {
+                sendKeycloakVerifyEmail(user.getUserId(), user.getEmail());
+            }
         }
 
         if (request.getFirstName() != null) user.setFirstName(request.getFirstName());
@@ -192,6 +253,20 @@ public class UserServiceImpl implements IUserService {
         User user = userRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("User not found with userId: " + userId));
         
+        // Delete user in Keycloak first
+        try {
+            KeycloakAdminInfo adminInfo = getKeycloakAdminInfo();
+            if (adminInfo == null || adminInfo.token == null || adminInfo.adminPath == null) {
+                log.error("Failed to get admin token or path to delete user in Keycloak");
+            } else {
+                identityClient.deleteUser(adminInfo.adminPath, user.getUserId(),
+                        "Bearer " + adminInfo.token.getAccessToken());
+                log.info("Deleted user in Keycloak: {}", user.getUserId());
+            }
+        } catch (Exception e) {
+            log.error("Failed to delete user in Keycloak: {}. Error: {}", user.getUserId(), e.getMessage());
+        }
+
         if (user.getAvatarPublicId() != null && !user.getAvatarPublicId().isEmpty()) {
             log.info("Deleting avatar with publicId: {} for user: {}", user.getAvatarPublicId(), userId);
             boolean deleted = cloudinaryService.deleteImage(user.getAvatarPublicId());
@@ -285,6 +360,8 @@ public class UserServiceImpl implements IUserService {
         return UserResponseDTO.fromEntity(updatedUser);
     }
 
+    // Custom token verification flow removed; handled by Keycloak email verification
+
     private void updateUserEnabledInKeycloak(String keycloakUserId, boolean enabled) {
         try {
             KeycloakAdminInfo adminInfo = getKeycloakAdminInfo();
@@ -353,8 +430,9 @@ public class UserServiceImpl implements IUserService {
                 .username(request.getUsername())
                 .email(request.getEmail())
                 .firstName(request.getFirstName())
-                .enabled(false)
+                .enabled(true)
                 .emailVerified(false)
+                .requiredActions(java.util.List.of("VERIFY_EMAIL"))
                 .build();
         
         if (isNotBlank(request.getLastName())) {
@@ -475,8 +553,131 @@ public class UserServiceImpl implements IUserService {
         }
     }
 
+    private void sendKeycloakVerifyEmail(String keycloakUserId, String email) {
+        try {
+            KeycloakAdminInfo adminInfo = getKeycloakAdminInfo();
+            if (adminInfo == null || adminInfo.token == null || adminInfo.adminPath == null) {
+                log.error("Failed to get admin token or path to send verify email via Keycloak");
+                return;
+            }
+
+            // Verify user exists and check requiredActions
+            try {
+                var kcUser = identityClient.getUser(adminInfo.adminPath, keycloakUserId,
+                        "Bearer " + adminInfo.token.getAccessToken());
+                Object requiredActionsObj = kcUser.get("requiredActions");
+                log.info("User requiredActions in Keycloak: {}", requiredActionsObj);
+                
+                // If requiredActions is empty or null, update user to add VERIFY_EMAIL
+                if (requiredActionsObj == null || (requiredActionsObj instanceof List && ((List<?>) requiredActionsObj).isEmpty())) {
+                    log.info("Updating user to add VERIFY_EMAIL required action");
+                    UserCreationRequest updateRequest = UserCreationRequest.builder()
+                            .requiredActions(java.util.List.of("VERIFY_EMAIL"))
+                            .build();
+                    identityClient.updateUser(adminInfo.adminPath, keycloakUserId, updateRequest,
+                            "Bearer " + adminInfo.token.getAccessToken());
+                }
+            } catch (Exception verifyEx) {
+                log.warn("Failed to verify/update user in Keycloak: {}", verifyEx.getMessage());
+            }
+
+            java.util.List<String> actions = java.util.List.of("VERIFY_EMAIL");
+            String redirectUri = System.getProperty("app.verify-redirect-uri", null);
+            String authHeader = "Bearer " + adminInfo.token.getAccessToken();
+
+            // Try PUT method first (some Keycloak versions prefer PUT)
+            try {
+                identityClient.executeActionsEmail(adminInfo.adminPath, keycloakUserId,
+                        authHeader, null, redirectUri, actions);
+                log.info("Successfully triggered Keycloak verify email for {} using PUT (no client_id)", email);
+                return;
+            } catch (Exception e1) {
+                log.warn("execute-actions-email PUT without client_id failed: {}", e1.getMessage());
+            }
+
+            // Try PUT with client_id
+            for (String cid : new String[]{"account", "account-console"}) {
+                try {
+                    identityClient.executeActionsEmail(adminInfo.adminPath, keycloakUserId,
+                            authHeader, cid, redirectUri, actions);
+                    log.info("Successfully triggered Keycloak verify email for {} using PUT (client_id={})", email, cid);
+                    return;
+                } catch (Exception e2) {
+                    log.warn("execute-actions-email PUT with client_id={} failed: {}", cid, e2.getMessage());
+                }
+            }
+
+            // Fallback to POST method
+            try {
+                identityClient.executeActionsEmailPost(adminInfo.adminPath, keycloakUserId,
+                        authHeader, null, redirectUri, actions);
+                log.info("Successfully triggered Keycloak verify email for {} using POST (no client_id)", email);
+                return;
+            } catch (Exception e3) {
+                log.warn("execute-actions-email POST without client_id failed: {}", e3.getMessage());
+            }
+
+            for (String cid : new String[]{"account", "account-console"}) {
+                try {
+                    identityClient.executeActionsEmailPost(adminInfo.adminPath, keycloakUserId,
+                            authHeader, cid, redirectUri, actions);
+                    log.info("Successfully triggered Keycloak verify email for {} using POST (client_id={})", email, cid);
+                    return;
+                } catch (Exception e4) {
+                    log.warn("execute-actions-email POST with client_id={} failed: {}", cid, e4.getMessage());
+                }
+            }
+
+            log.warn("All attempts to send Keycloak verify email failed for {}. " +
+                    "User was created with requiredActions=[VERIFY_EMAIL], so Keycloak may send email automatically when user first logs in.", email);
+        } catch (Exception ex) {
+            log.error("Failed to send Keycloak verify email for {}. Error: {}", email, ex.getMessage(), ex);
+        }
+    }
+
     private boolean isNotBlank(String value) {
         return value != null && !value.trim().isEmpty();
+    }
+
+    @Override
+    public UserResponseDTO syncEmailVerification(String userId) {
+        User user = userRepository.findByUserId(userId)
+                .orElseThrow(() -> new RuntimeException("User not found with userId: " + userId));
+
+        try {
+            KeycloakAdminInfo adminInfo = getKeycloakAdminInfo();
+            if (adminInfo == null || adminInfo.token == null || adminInfo.adminPath == null) {
+                throw new RuntimeException("Failed to get admin token from Keycloak");
+            }
+
+            var kcUser = identityClient.getUser(adminInfo.adminPath, userId,
+                    "Bearer " + adminInfo.token.getAccessToken());
+            
+            Object emailVerifiedObj = kcUser.get("emailVerified");
+            Boolean emailVerified = emailVerifiedObj instanceof Boolean ? (Boolean) emailVerifiedObj : 
+                                   (emailVerifiedObj instanceof String && "true".equalsIgnoreCase(emailVerifiedObj.toString()));
+
+            if (Boolean.TRUE.equals(emailVerified)) {
+                log.info("Email verified in Keycloak for user: {}. Activating user.", userId);
+                user.setStatus(User.UserStatus.ACTIVE);
+                userRepository.save(user);
+                
+                // Ensure user is enabled in Keycloak
+                Object enabledObj = kcUser.get("enabled");
+                Boolean enabled = enabledObj instanceof Boolean ? (Boolean) enabledObj : 
+                                 (enabledObj instanceof String && "true".equalsIgnoreCase(enabledObj.toString()));
+                if (!Boolean.TRUE.equals(enabled)) {
+                    enableUserInKeycloak(userId);
+                }
+                
+                return UserResponseDTO.fromEntity(user);
+            } else {
+                throw new RuntimeException("Email not verified in Keycloak for user: " + userId);
+            }
+        } catch (Exception e) {
+            log.error("Failed to sync email verification for user {}: {}", userId, e.getMessage());
+            throw new RuntimeException("Failed to sync email verification: " + e.getMessage());
+        }
     }
 
     private String extractUserId(ResponseEntity<?> response) {

@@ -30,15 +30,15 @@ services:
         value: user-service.onrender.com
       - key: SPRING_DATASOURCE_URL
         fromDatabase:
-          name: user-service-db
+          name: project3-db
           property: connectionString
       - key: SPRING_DATASOURCE_USERNAME
         fromDatabase:
-          name: user-service-db
+          name: project3-db
           property: user
       - key: SPRING_DATASOURCE_PASSWORD
         fromDatabase:
-          name: user-service-db
+          name: project3-db
           property: password
       - key: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
         value: https://discovery-server.onrender.com/eureka/
@@ -212,20 +212,20 @@ services:
       - key: KC_BOOTSTRAP_ADMIN_USERNAME
         value: admin
       - key: KC_BOOTSTRAP_ADMIN_PASSWORD
-        value: dodinhtrung1  # Điền mật khẩu mạnh cho Keycloak admin (khuyến nghị thay đổi từ "admin")
+        sync: false  # Điền mật khẩu mạnh cho Keycloak admin
       - key: KC_DB
         value: postgres
       - key: KC_DB_USERNAME
         fromDatabase:
-          name: keycloak-db
+          name: project3-db
           property: user
       - key: KC_DB_PASSWORD
         fromDatabase:
-          name: keycloak-db
+          name: project3-db
           property: password
       - key: KC_DB_URL
         fromDatabase:
-          name: keycloak-db
+          name: project3-db
           property: connectionString
       - key: KC_HOSTNAME_STRICT
         value: "false"
@@ -249,29 +249,10 @@ services:
         value: "false"
 
 databases:
-  - name: user-service-db
-    databaseName: userservice
-    user: userserviceuser
-    plan: free
-
-  - name: menu-service-db
-    databaseName: menuservice
-    user: menuserviceuser
-    plan: free
-
-  - name: inventory-service-db
-    databaseName: inventoryservice
-    user: inventoryserviceuser
-    plan: free
-
-  - name: order-service-db
-    databaseName: orderservice
-    user: orderserviceuser
-    plan: free
-
-  - name: keycloak-db
-    databaseName: keycloak
-    user: keycloakuser
+  # Chỉ dùng 1 database free tier cho tất cả services
+  - name: project3-db
+    databaseName: project3
+    user: project3user
     plan: free
 
 # Lưu ý: Redis cần được tạo riêng trong Render Dashboard

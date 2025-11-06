@@ -1,9 +1,10 @@
 // API Configuration
-export const API_BASE_URL = 'http://localhost:8080';
+// Sử dụng environment variables cho production, fallback về localhost cho development
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 export const IDP = {
-    URL: 'http://localhost:8180',
-    REALM: 'project3',
-    CLIENT_ID: 'project3',
+    URL: import.meta.env.VITE_KEYCLOAK_URL || 'http://localhost:8180',
+    REALM: import.meta.env.VITE_KEYCLOAK_REALM || 'project3',
+    CLIENT_ID: import.meta.env.VITE_KEYCLOAK_CLIENT_ID || 'project3',
     CALLBACK_PATH: '/auth/callback',
 };
 

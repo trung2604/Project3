@@ -1,0 +1,281 @@
+services:
+  # Discovery Server - Deploy đầu tiên
+  - type: web
+    name: discovery-server
+    env: docker
+    dockerfilePath: ./discoveryserver/Dockerfile
+    dockerContext: ./discoveryserver
+    buildCommand: cd discoveryserver && mvn clean package -DskipTests
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+      - key: PORT
+        value: "8761"
+      - key: HOSTNAME
+        value: discovery-server.onrender.com
+
+  # User Service
+  - type: web
+    name: user-service
+    env: docker
+    dockerfilePath: ./userservice/Dockerfile
+    dockerContext: ./userservice
+    buildCommand: cd userservice && mvn clean package -DskipTests
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+      - key: PORT
+        value: "8005"
+      - key: HOSTNAME
+        value: user-service.onrender.com
+      - key: SPRING_DATASOURCE_URL
+        fromDatabase:
+          name: user-service-db
+          property: connectionString
+      - key: SPRING_DATASOURCE_USERNAME
+        fromDatabase:
+          name: user-service-db
+          property: user
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromDatabase:
+          name: user-service-db
+          property: password
+      - key: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
+        value: https://discovery-server.onrender.com/eureka/
+      - key: IDP_URL
+        value: https://keycloak-service.onrender.com
+      - key: IDP_REDIRECT_URI
+        value: https://your-frontend.vercel.app/verify-email  # Cập nhật sau khi deploy frontend
+      - key: IDP_FRONTEND_URL
+        value: https://keycloak-service.onrender.com
+      - key: APP_BASE_URL
+        value: https://user-service.onrender.com
+      - key: IDP_CLIENT_SECRET
+        value: VnlCwjNr3yhLfeavH8BqMoStyZAesDrR
+      - key: MAIL_HOST
+        value: smtp.gmail.com
+      - key: MAIL_PORT
+        value: "587"
+      - key: MAIL_USERNAME
+        value: dodinhtrungthptyv@gmail.com
+      - key: MAIL_PASSWORD
+        value: "uqktcqksfaabymni"  # Điền Gmail App Password (16 ký tự, không có khoảng trắng)
+      - key: CLOUDINARY_API_KEY
+        value: "413819856725241"
+      - key: CLOUDINARY_API_SECRET
+        value: "Ow82YqGHc_r1BspRU_2ElWsTlO0"
+      - key: CLOUDINARY_CLOUD_NAME
+        value: "dswb2h4ny"
+
+  # Menu Service
+  - type: web
+    name: menu-service
+    env: docker
+    dockerfilePath: ./menuservice/Dockerfile
+    dockerContext: ./menuservice
+    buildCommand: cd menuservice && mvn clean package -DskipTests
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+      - key: PORT
+        value: "8002"
+      - key: HOSTNAME
+        value: menu-service.onrender.com
+      - key: SPRING_DATASOURCE_URL
+        fromDatabase:
+          name: menu-service-db
+          property: connectionString
+      - key: SPRING_DATASOURCE_USERNAME
+        fromDatabase:
+          name: menu-service-db
+          property: user
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromDatabase:
+          name: menu-service-db
+          property: password
+      - key: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
+        value: https://discovery-server.onrender.com/eureka/
+      - key: SPRING_KAFKA_BOOTSTRAP_SERVERS
+        sync: false  # Điền Kafka URL từ Railway (ví dụ: kafka-production.up.railway.app:9092)
+      - key: CLOUDINARY_CLOUD_NAME
+        value: "dswb2h4ny"
+      - key: CLOUDINARY_API_KEY
+        value: "413819856725241"
+      - key: CLOUDINARY_API_SECRET
+        value: "Ow82YqGHc_r1BspRU_2ElWsTlO0"
+
+  # Inventory Service
+  - type: web
+    name: inventory-service
+    env: docker
+    dockerfilePath: ./inventoryservice/Dockerfile
+    dockerContext: ./inventoryservice
+    buildCommand: cd inventoryservice && mvn clean package -DskipTests
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+      - key: PORT
+        value: "8003"
+      - key: HOSTNAME
+        value: inventory-service.onrender.com
+      - key: SPRING_DATASOURCE_URL
+        fromDatabase:
+          name: inventory-service-db
+          property: connectionString
+      - key: SPRING_DATASOURCE_USERNAME
+        fromDatabase:
+          name: inventory-service-db
+          property: user
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromDatabase:
+          name: inventory-service-db
+          property: password
+      - key: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
+        value: https://discovery-server.onrender.com/eureka/
+
+  # Order Service
+  - type: web
+    name: order-service
+    env: docker
+    dockerfilePath: ./orderservice/Dockerfile
+    dockerContext: ./orderservice
+    buildCommand: cd orderservice && mvn clean package -DskipTests
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+      - key: PORT
+        value: "8001"
+      - key: HOSTNAME
+        value: order-service.onrender.com
+      - key: SPRING_DATASOURCE_URL
+        fromDatabase:
+          name: order-service-db
+          property: connectionString
+      - key: SPRING_DATASOURCE_USERNAME
+        fromDatabase:
+          name: order-service-db
+          property: user
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromDatabase:
+          name: order-service-db
+          property: password
+      - key: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
+        value: https://discovery-server.onrender.com/eureka/
+      - key: AXON_SERVERS
+        sync: false
+
+  # API Gateway
+  - type: web
+    name: api-gateway
+    env: docker
+    dockerfilePath: ./apigateway/Dockerfile
+    dockerContext: ./apigateway
+    buildCommand: cd apigateway && mvn clean package -DskipTests
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+      - key: PORT
+        value: "8080"
+      - key: HOSTNAME
+        value: api-gateway.onrender.com
+      - key: SPRING_DATA_REDIS_HOST
+        sync: false  # Tạo Redis riêng trong Render Dashboard và điền giá trị
+      - key: SPRING_DATA_REDIS_PORT
+        sync: false  # Tạo Redis riêng trong Render Dashboard và điền giá trị
+      - key: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
+        value: https://discovery-server.onrender.com/eureka/
+      - key: SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI
+        value: https://keycloak-service.onrender.com/realms/project3
+      - key: SPRING_CLOUD_GATEWAY_GLOBALCORS_CORS_CONFIGURATIONS_ALLOWEDORIGINS
+        sync: false  # Cập nhật sau khi deploy frontend (ví dụ: https://restaurant-frontend.vercel.app)
+
+  # Notification Service
+  - type: web
+    name: notification-service
+    env: docker
+    dockerfilePath: ./notificationservice/Dockerfile
+    dockerContext: ./notificationservice
+    buildCommand: cd notificationservice && mvn clean package -DskipTests
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: production
+      - key: SPRING_KAFKA_BOOTSTRAP_SERVERS
+        sync: false
+
+  # Keycloak
+  - type: web
+    name: keycloak-service
+    env: docker
+    dockerfilePath: ./Keycloak/Dockerfile.keycloak
+    dockerContext: ./Keycloak
+    envVars:
+      - key: KC_BOOTSTRAP_ADMIN_USERNAME
+        value: admin
+      - key: KC_BOOTSTRAP_ADMIN_PASSWORD
+        value: dodinhtrung1  # Điền mật khẩu mạnh cho Keycloak admin (khuyến nghị thay đổi từ "admin")
+      - key: KC_DB
+        value: postgres
+      - key: KC_DB_USERNAME
+        fromDatabase:
+          name: keycloak-db
+          property: user
+      - key: KC_DB_PASSWORD
+        fromDatabase:
+          name: keycloak-db
+          property: password
+      - key: KC_DB_URL
+        fromDatabase:
+          name: keycloak-db
+          property: connectionString
+      - key: KC_HOSTNAME_STRICT
+        value: "false"
+      - key: KC_HOSTNAME_STRICT_HTTPS
+        value: "false"
+      - key: KC_HTTP_ENABLED
+        value: "true"
+      - key: KC_MAIL_HOST
+        value: smtp.gmail.com
+      - key: KC_MAIL_PORT
+        value: "587"
+      - key: KC_MAIL_FROM
+        value: dodinhtrungthptyv@gmail.com
+      - key: KC_MAIL_USER
+        value: dodinhtrungthptyv@gmail.com
+      - key: KC_MAIL_PASSWORD
+        value: uqktcqksfaabymni # Điền Gmail App Password (16 ký tự, không có khoảng trắng)
+      - key: KC_MAIL_STARTTLS
+        value: "true"
+      - key: KC_MAIL_SSL
+        value: "false"
+
+databases:
+  - name: user-service-db
+    databaseName: userservice
+    user: userserviceuser
+    plan: free
+
+  - name: menu-service-db
+    databaseName: menuservice
+    user: menuserviceuser
+    plan: free
+
+  - name: inventory-service-db
+    databaseName: inventoryservice
+    user: inventoryserviceuser
+    plan: free
+
+  - name: order-service-db
+    databaseName: orderservice
+    user: orderserviceuser
+    plan: free
+
+  - name: keycloak-db
+    databaseName: keycloak
+    user: keycloakuser
+    plan: free
+
+# Lưu ý: Redis cần được tạo riêng trong Render Dashboard
+# 1. Vào Render Dashboard → New → Redis
+# 2. Tạo Redis instance
+# 3. Copy host và port vào SPRING_DATA_REDIS_HOST và SPRING_DATA_REDIS_PORT của api-gateway
+

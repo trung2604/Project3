@@ -5,7 +5,6 @@ services:
     env: docker
     dockerfilePath: ./discoveryserver/Dockerfile
     dockerContext: ./discoveryserver
-    buildCommand: ""  # Không cần build command, Dockerfile sẽ tự build
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -20,7 +19,6 @@ services:
     env: docker
     dockerfilePath: ./userservice/Dockerfile
     dockerContext: ./userservice
-    buildCommand: ""  # Không cần build command, Dockerfile sẽ tự build
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -73,7 +71,6 @@ services:
     env: docker
     dockerfilePath: ./menuservice/Dockerfile
     dockerContext: ./menuservice
-    buildCommand: ""  # Không cần build command, Dockerfile sẽ tự build
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -110,7 +107,6 @@ services:
     env: docker
     dockerfilePath: ./inventoryservice/Dockerfile
     dockerContext: ./inventoryservice
-    buildCommand: ""  # Không cần build command, Dockerfile sẽ tự build
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -139,7 +135,6 @@ services:
     env: docker
     dockerfilePath: ./orderservice/Dockerfile
     dockerContext: ./orderservice
-    buildCommand: ""  # Không cần build command, Dockerfile sẽ tự build
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -170,7 +165,6 @@ services:
     env: docker
     dockerfilePath: ./apigateway/Dockerfile
     dockerContext: ./apigateway
-    buildCommand: ""  # Không cần build command, Dockerfile sẽ tự build
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -195,7 +189,6 @@ services:
     env: docker
     dockerfilePath: ./notificationservice/Dockerfile
     dockerContext: ./notificationservice
-    buildCommand: ""  # Không cần build command, Dockerfile sẽ tự build
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production

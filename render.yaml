@@ -5,7 +5,7 @@ services:
     env: docker
     dockerfilePath: ./discoveryserver/Dockerfile
     dockerContext: ./discoveryserver
-    buildCommand: cd discoveryserver && mvn clean package -DskipTests
+    buildCommand: ""  # Không cần build command, Dockerfile sẽ tự build
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production

@@ -20,7 +20,7 @@ services:
     env: docker
     dockerfilePath: ./userservice/Dockerfile
     dockerContext: ./userservice
-    buildCommand: cd userservice && mvn clean package -DskipTests
+    buildCommand: ""  # Không cần build command, Dockerfile sẽ tự build
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -59,7 +59,7 @@ services:
       - key: MAIL_USERNAME
         value: dodinhtrungthptyv@gmail.com
       - key: MAIL_PASSWORD
-        value: "uqktcqksfaabymni"  # Điền Gmail App Password (16 ký tự, không có khoảng trắng)
+        sync: false  # Điền Gmail App Password (16 ký tự, không có khoảng trắng)
       - key: CLOUDINARY_API_KEY
         value: "413819856725241"
       - key: CLOUDINARY_API_SECRET
@@ -73,7 +73,7 @@ services:
     env: docker
     dockerfilePath: ./menuservice/Dockerfile
     dockerContext: ./menuservice
-    buildCommand: cd menuservice && mvn clean package -DskipTests
+    buildCommand: ""  # Không cần build command, Dockerfile sẽ tự build
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -83,15 +83,15 @@ services:
         value: menu-service.onrender.com
       - key: SPRING_DATASOURCE_URL
         fromDatabase:
-          name: menu-service-db
+          name: project3-db
           property: connectionString
       - key: SPRING_DATASOURCE_USERNAME
         fromDatabase:
-          name: menu-service-db
+          name: project3-db
           property: user
       - key: SPRING_DATASOURCE_PASSWORD
         fromDatabase:
-          name: menu-service-db
+          name: project3-db
           property: password
       - key: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
         value: https://discovery-server.onrender.com/eureka/
@@ -110,7 +110,7 @@ services:
     env: docker
     dockerfilePath: ./inventoryservice/Dockerfile
     dockerContext: ./inventoryservice
-    buildCommand: cd inventoryservice && mvn clean package -DskipTests
+    buildCommand: ""  # Không cần build command, Dockerfile sẽ tự build
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -120,15 +120,15 @@ services:
         value: inventory-service.onrender.com
       - key: SPRING_DATASOURCE_URL
         fromDatabase:
-          name: inventory-service-db
+          name: project3-db
           property: connectionString
       - key: SPRING_DATASOURCE_USERNAME
         fromDatabase:
-          name: inventory-service-db
+          name: project3-db
           property: user
       - key: SPRING_DATASOURCE_PASSWORD
         fromDatabase:
-          name: inventory-service-db
+          name: project3-db
           property: password
       - key: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
         value: https://discovery-server.onrender.com/eureka/
@@ -139,7 +139,7 @@ services:
     env: docker
     dockerfilePath: ./orderservice/Dockerfile
     dockerContext: ./orderservice
-    buildCommand: cd orderservice && mvn clean package -DskipTests
+    buildCommand: ""  # Không cần build command, Dockerfile sẽ tự build
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -149,15 +149,15 @@ services:
         value: order-service.onrender.com
       - key: SPRING_DATASOURCE_URL
         fromDatabase:
-          name: order-service-db
+          name: project3-db
           property: connectionString
       - key: SPRING_DATASOURCE_USERNAME
         fromDatabase:
-          name: order-service-db
+          name: project3-db
           property: user
       - key: SPRING_DATASOURCE_PASSWORD
         fromDatabase:
-          name: order-service-db
+          name: project3-db
           property: password
       - key: EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE
         value: https://discovery-server.onrender.com/eureka/
@@ -170,7 +170,7 @@ services:
     env: docker
     dockerfilePath: ./apigateway/Dockerfile
     dockerContext: ./apigateway
-    buildCommand: cd apigateway && mvn clean package -DskipTests
+    buildCommand: ""  # Không cần build command, Dockerfile sẽ tự build
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -195,7 +195,7 @@ services:
     env: docker
     dockerfilePath: ./notificationservice/Dockerfile
     dockerContext: ./notificationservice
-    buildCommand: cd notificationservice && mvn clean package -DskipTests
+    buildCommand: ""  # Không cần build command, Dockerfile sẽ tự build
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -242,7 +242,7 @@ services:
       - key: KC_MAIL_USER
         value: dodinhtrungthptyv@gmail.com
       - key: KC_MAIL_PASSWORD
-        value: uqktcqksfaabymni # Điền Gmail App Password (16 ký tự, không có khoảng trắng)
+        sync: false  # Điền Gmail App Password (16 ký tự, không có khoảng trắng)
       - key: KC_MAIL_STARTTLS
         value: "true"
       - key: KC_MAIL_SSL

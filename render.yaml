@@ -5,6 +5,7 @@ services:
     env: docker
     dockerfilePath: ./discoveryserver/Dockerfile
     dockerContext: ./discoveryserver
+    startCommand: java -jar app.jar
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -19,6 +20,7 @@ services:
     env: docker
     dockerfilePath: ./userservice/Dockerfile
     dockerContext: ./userservice
+    startCommand: java -jar app.jar
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -71,6 +73,7 @@ services:
     env: docker
     dockerfilePath: ./menuservice/Dockerfile
     dockerContext: ./menuservice
+    startCommand: java -jar app.jar
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -107,6 +110,7 @@ services:
     env: docker
     dockerfilePath: ./inventoryservice/Dockerfile
     dockerContext: ./inventoryservice
+    startCommand: java -jar app.jar
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -135,6 +139,7 @@ services:
     env: docker
     dockerfilePath: ./orderservice/Dockerfile
     dockerContext: ./orderservice
+    startCommand: java -jar app.jar
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -165,6 +170,7 @@ services:
     env: docker
     dockerfilePath: ./apigateway/Dockerfile
     dockerContext: ./apigateway
+    startCommand: java -jar app.jar
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production
@@ -189,6 +195,7 @@ services:
     env: docker
     dockerfilePath: ./notificationservice/Dockerfile
     dockerContext: ./notificationservice
+    startCommand: java -jar app.jar
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: production

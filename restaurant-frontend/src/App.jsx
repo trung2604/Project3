@@ -15,6 +15,7 @@ import InventoryTransactions from './pages/InventoryTransactions';
 import MenuManagement from './pages/MenuManagement';
 import MenuCategories from './pages/MenuCategories';
 import MenuCombos from './pages/MenuCombos';
+import Staff from './pages/Staff';
 import { RestaurantProvider } from './context/RestaurantContext';
 import { AuthProvider } from './context/AuthContext';
 
@@ -79,7 +80,7 @@ function App() {
                                                     <Route path="/menu/categories" element={<MenuCategories />} />
                                                     <Route path="/menu/combos" element={<MenuCombos />} />
                                                     <Route path="/orders" element={<Dashboard />} />
-                                                    <Route path="/staff" element={<Dashboard />} />
+                                                    <Route path="/staff" element={<Staff />} />
                                                     <Route path="/settings" element={<Dashboard />} />
                                                     <Route path="/profile" element={<Profile />} />
                                                 </Routes>

@@ -27,7 +27,7 @@ import {
     DownloadOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { inventoryService } from '../services/inventoryService';
+import apiService from '../services/apiService';
 import { PAGINATION, TRANSACTION_TYPES } from '../constants.js';
 import { canManageInventory } from '../utils/auth';
 import { useAuth } from '../context/AuthContext';
@@ -101,7 +101,7 @@ const InventoryTransactions = () => {
                 params.toDate = filters.dateRange[1].format('YYYY-MM-DD');
             }
 
-            const response = await inventoryService.getTransactions(params);
+            const response = await apiService.inventory.getTransactions(params);
             const list = Array.isArray(response.data) ? response.data : (response.data?.transactions || []);
             console.log('Transactions API Response:', response);
             console.log('Transactions Data:', response.data);

@@ -64,6 +64,13 @@ TestApiMenu.txt
 Kafka/
 Keycloak/
 
+# Docker compose with secrets
+docker-compose.yml
+
+# Kubernetes configs with secrets
+k8s/
+
 # Local debug/test artifacts
 JSON_PARSE_ERROR_DEBUG.md
 test_ingredient*.json
+APPLICATION_CONFIG_CHECK_REPORT.md

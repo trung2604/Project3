@@ -34,11 +34,10 @@ import {
     DeleteOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { inventoryService } from '../services/inventoryService';
+import apiService from '../services/apiService';
 import { PAGINATION, STATUS, TRANSACTION_TYPES } from '../constants.js';
 import { Upload, Image, Switch } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
-import { cloudinaryService } from '../services/cloudinaryService';
 import { canManageInventory } from '../utils/auth';
 import { useAuth } from '../context/AuthContext';
 import Loading from '../components/Common/Loading';
@@ -101,9 +100,9 @@ const InventoryManagement = () => {
                 ...(filters.search && filters.search.trim() !== '' && { search: filters.search })
             };
 
-            const response = await inventoryService.getIngredients(params);
-            // Backend returns PagedIngredientResponse with different structure
-            const data = response.data;
+            const response = await apiService.inventory.getIngredients(params);
+            // apiService already unwraps the response
+            const data = response?.data || response;
             setIngredients(data.ingredients || []);
             setPagination(prev => ({
                 ...prev,
@@ -171,22 +170,22 @@ const InventoryManagement = () => {
                     message.error('Vui lòng upload hình ảnh trước khi lưu');
                     return;
                 }
-                await inventoryService.createIngredient(values);
+                await apiService.inventory.createIngredient(values);
                 message.success('Tạo nguyên liệu thành công');
             } else if (modalType === 'edit') {
-                await inventoryService.updateIngredient(selectedIngredient.ingredientId, values);
+                await apiService.inventory.updateIngredient(selectedIngredient.ingredientId, values);
                 message.success('Cập nhật nguyên liệu thành công');
             } else if (modalType === 'stock-in') {
-                await inventoryService.stockIn(selectedIngredient.ingredientId, values);
+                await apiService.inventory.stockIn(selectedIngredient.ingredientId, values);
                 message.success('Nhập hàng thành công');
             } else if (modalType === 'stock-out') {
-                await inventoryService.stockOut(selectedIngredient.ingredientId, values);
+                await apiService.inventory.stockOut(selectedIngredient.ingredientId, values);
                 message.success('Xuất hàng thành công');
             } else if (modalType === 'adjust') {
-                await inventoryService.adjustStock(selectedIngredient.ingredientId, values);
+                await apiService.inventory.adjustStock(selectedIngredient.ingredientId, values);
                 message.success('Điều chỉnh tồn kho thành công');
             } else if (modalType === 'stock-take') {
-                await inventoryService.stockTake(selectedIngredient.ingredientId, values);
+                await apiService.inventory.stockTake(selectedIngredient.ingredientId, values);
                 message.success('Kiểm kê tồn kho thành công');
             }
 
@@ -201,7 +200,7 @@ const InventoryManagement = () => {
     // Toggle active status
     const handleToggleActive = async (id, active) => {
         try {
-            await inventoryService.toggleIngredientActive(id, active);
+            await apiService.inventory.toggleIngredientActive(id, active);
             message.success(`Đã ${active ? 'kích hoạt' : 'vô hiệu hóa'} nguyên liệu`);
             loadIngredients(pagination.current, pagination.pageSize);
         } catch (error) {
@@ -212,7 +211,7 @@ const InventoryManagement = () => {
     // Delete ingredient
     const handleDeleteIngredient = async (id) => {
         try {
-            await inventoryService.deleteIngredient(id);
+            await apiService.inventory.deleteIngredient(id);
             message.success('Xóa nguyên liệu thành công');
             loadIngredients(pagination.current, pagination.pageSize);
         } catch (error) {
@@ -445,7 +444,7 @@ const InventoryManagement = () => {
                         beforeUpload={async (file) => {
                             setUploading(true);
                             try {
-                                const result = await cloudinaryService.uploadImage(file);
+                                const result = await apiService.cloudinary.uploadImage(file);
                                 form.setFieldsValue({
                                     imageUrl: result.url,
                                     imagePublicId: result.publicId

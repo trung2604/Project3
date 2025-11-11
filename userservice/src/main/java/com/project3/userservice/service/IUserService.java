@@ -13,6 +13,9 @@ import com.project3.userservice.dto.identity.TokenExchangeResponse;
 import com.project3.userservice.dto.UserResponseDTO;
 import com.project3.userservice.entity.User;
 
+import java.util.List;
+import java.util.Map;
+
 public interface IUserService {
     UserResponseDTO createUser(CreateUserRequestDTO request);
     UserResponseDTO registerUser(RegisterUserRequestDTO request);
@@ -28,4 +31,8 @@ public interface IUserService {
     UserResponseDTO updateMyProfile(String userId, UpdateUserRequestDTO request);
     void changeMyPassword(String userId, ChangePasswordRequestDTO request);
     TokenExchangeResponse exchangeAuthorizationCode(OAuthCodeExchangeRequest request);
+    void initializeKeycloakRoles();
+    List<Map<String, Object>> getRealmRoles();
+    List<Map<String, Object>> getClientRoles();
+    void syncDeletedUsersFromKeycloak();
 }

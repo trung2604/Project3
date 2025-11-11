@@ -33,9 +33,7 @@ import {
     UploadOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { menuService } from '../services/menuService';
-import { inventoryService } from '../services/inventoryService';
-import { cloudinaryService } from '../services/cloudinaryService';
+import apiService from '../services/apiService';
 import { PAGINATION } from '../constants.js';
 import { canManageMenu } from '../utils/auth';
 import { useAuth } from '../context/AuthContext';
@@ -102,13 +100,14 @@ const MenuManagement = () => {
                 ...(filters.search && filters.search.trim() !== '' && { search: filters.search })
             };
 
-            const response = await menuService.getMenuItems(params);
-            const data = response.data;
-            setMenuItems(data.items || []);
+            const response = await apiService.menu.getMenuItems(params);
+            // apiService already unwraps the response
+            const data = response?.data || response;
+            setMenuItems(data?.items || []);
             setPagination(prev => ({
                 ...prev,
                 current: page,
-                total: data.totalElements || 0
+                total: data?.totalElements || 0
             }));
         } catch (error) {
             message.error('Lỗi khi tải dữ liệu món ăn');
@@ -121,8 +120,9 @@ const MenuManagement = () => {
     // Load categories
     const loadCategories = async () => {
         try {
-            const response = await menuService.getCategories();
-            setCategories(response.data || []);
+            const response = await apiService.menu.getCategories();
+            // apiService already unwraps the response
+            setCategories(response?.data || response || []);
         } catch (error) {
             console.error('Error loading categories:', error);
         }
@@ -131,8 +131,10 @@ const MenuManagement = () => {
     // Load ingredients
     const loadIngredients = async () => {
         try {
-            const response = await inventoryService.getIngredients({ size: 1000 });
-            setIngredients(response.data.ingredients || []);
+            const response = await apiService.inventory.getIngredients({ size: 1000 });
+            // apiService already unwraps the response
+            const data = response?.data || response;
+            setIngredients(data?.ingredients || []);
         } catch (error) {
             console.error('Error loading ingredients:', error);
         }
@@ -197,13 +199,13 @@ const MenuManagement = () => {
             };
 
             if (modalType === 'create') {
-                await menuService.createMenuItem(payload);
+                await apiService.menu.createMenuItem(payload);
                 message.success('Tạo món ăn thành công');
             } else if (modalType === 'edit') {
-                await menuService.updateMenuItem(selectedMenuItem.menuItemId, payload);
+                await apiService.menu.updateMenuItem(selectedMenuItem.menuItemId, payload);
                 message.success('Cập nhật món ăn thành công');
             } else if (modalType === 'ingredients') {
-                await menuService.updateMenuItemIngredients(selectedMenuItem.menuItemId, values.ingredients);
+                await apiService.menu.updateMenuItemIngredients(selectedMenuItem.menuItemId, values.ingredients);
                 message.success('Cập nhật nguyên liệu thành công');
             }
 
@@ -218,7 +220,7 @@ const MenuManagement = () => {
     // Toggle active status
     const handleToggleActive = async (id, active) => {
         try {
-            await menuService.toggleMenuItemActive(id, active);
+            await apiService.menu.toggleMenuItemActive(id, active);
             message.success(`Đã ${active ? 'kích hoạt' : 'vô hiệu hóa'} món ăn`);
             loadMenuItems(pagination.current, pagination.pageSize);
         } catch (error) {
@@ -229,7 +231,7 @@ const MenuManagement = () => {
     // Delete menu item
     const handleDeleteMenuItem = async (id) => {
         try {
-            await menuService.deleteMenuItem(id);
+            await apiService.menu.deleteMenuItem(id);
             message.success('Xóa món ăn thành công');
             loadMenuItems(pagination.current, pagination.pageSize);
         } catch (error) {
@@ -240,7 +242,7 @@ const MenuManagement = () => {
     // Update price
     const handleUpdatePrice = async (id, price) => {
         try {
-            await menuService.updateMenuItemPrice(id, price);
+            await apiService.menu.updateMenuItemPrice(id, price);
             message.success('Cập nhật giá thành công');
             loadMenuItems(pagination.current, pagination.pageSize);
         } catch (error) {
@@ -252,7 +254,7 @@ const MenuManagement = () => {
     const handleImageUpload = async (file) => {
         setUploading(true);
         try {
-            const result = await cloudinaryService.uploadImage(file);
+            const result = await apiService.cloudinary.uploadImage(file);
 
             form.setFieldsValue({
                 imageUrl: result.url,

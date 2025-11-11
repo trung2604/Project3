@@ -20,8 +20,7 @@ import {
     MailOutlined,
     PhoneOutlined
 } from '@ant-design/icons';
-import { userService } from '../services/userService';
-import { cloudinaryService } from '../services/cloudinaryService';
+import apiService from '../services/apiService';
 import { useAuth } from '../context/AuthContext';
 import Loading from '../components/Common/Loading';
 import dayjs from 'dayjs';
@@ -62,7 +61,7 @@ export default function Profile() {
                 ...values,
                 dateOfBirth: values.dateOfBirth ? values.dateOfBirth.format('YYYY-MM-DD') : null
             };
-            const updated = await userService.updateMe(updatedData);
+            const updated = await apiService.user.updateMe(updatedData);
             setUserData(updated);
             updateUser(updated);
             antMessage.success('Cập nhật thông tin thành công');
@@ -76,7 +75,7 @@ export default function Profile() {
     const handleChangePassword = async (values) => {
         try {
             setPasswordLoading(true);
-            await userService.changeMyPassword({
+            await apiService.user.changeMyPassword({
                 currentPassword: values.currentPassword,
                 newPassword: values.newPassword
             });
@@ -92,10 +91,10 @@ export default function Profile() {
     const handleAvatarUpload = async (file) => {
         try {
             setUploading(true);
-            const upload = await cloudinaryService.uploadUserAvatar(file);
-            const updated = await userService.updateAvatar(user.userId, {
-                avatarUrl: upload.url,
-                avatarPublicId: upload.publicId
+            const upload = await apiService.cloudinary.uploadUserAvatar(file);
+            const updated = await apiService.user.updateAvatar(user.userId, {
+                avatarUrl: upload.url || upload.secure_url,
+                avatarPublicId: upload.publicId || upload.public_id
             });
             setAvatarUrl(updated.avatarUrl);
             setUserData(updated);

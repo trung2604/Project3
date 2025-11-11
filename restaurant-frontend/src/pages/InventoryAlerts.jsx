@@ -25,7 +25,7 @@ import {
     BellOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { inventoryService } from '../services/inventoryService';
+import apiService from '../services/apiService';
 import { PAGINATION } from '../constants.js';
 import { canManageInventory } from '../utils/auth';
 import { useAuth } from '../context/AuthContext';
@@ -68,7 +68,7 @@ const InventoryAlerts = () => {
     const loadAlerts = async () => {
         setLoading(true);
         try {
-            const response = await inventoryService.getAlerts();
+            const response = await apiService.inventory.getAlerts();
             setAlerts(response.data || []);
         } catch (error) {
             message.error('Lỗi khi tải cảnh báo');
@@ -81,7 +81,7 @@ const InventoryAlerts = () => {
     // Load low stock alerts
     const loadLowStockAlerts = async () => {
         try {
-            const response = await inventoryService.getLowStockAlerts();
+            const response = await apiService.inventory.getLowStockAlerts();
             setLowStockAlerts(response.data || []);
         } catch (error) {
             console.error('Error loading low stock alerts:', error);
@@ -91,7 +91,7 @@ const InventoryAlerts = () => {
     // Load expiry alerts
     const loadExpiryAlerts = async () => {
         try {
-            const response = await inventoryService.getExpiryAlerts();
+            const response = await apiService.inventory.getExpiryAlerts();
             setExpiryAlerts(response.data || []);
         } catch (error) {
             console.error('Error loading expiry alerts:', error);
@@ -101,7 +101,7 @@ const InventoryAlerts = () => {
     // Load critical alerts
     const loadCriticalAlerts = async () => {
         try {
-            const response = await inventoryService.getCriticalAlerts();
+            const response = await apiService.inventory.getCriticalAlerts();
             setCriticalAlerts(response.data || []);
         } catch (error) {
             console.error('Error loading critical alerts:', error);
@@ -111,7 +111,7 @@ const InventoryAlerts = () => {
     // Load low stock ingredients
     const loadLowStockIngredients = async () => {
         try {
-            const response = await inventoryService.getLowStockIngredients();
+            const response = await apiService.inventory.getLowStockIngredients();
             // This will be used for the low stock tab
             return response.data || [];
         } catch (error) {

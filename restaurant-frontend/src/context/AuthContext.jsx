@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import apiClient from '../services/api';
-import { userService } from '../services/userService';
+import apiService from '../services/apiService';
 
 const AuthContext = createContext(null);
 
@@ -16,7 +15,7 @@ export function AuthProvider({ children }) {
 
     const loadUser = async () => {
         const token = localStorage.getItem('accessToken');
-        const storedUser = userService.getStoredUser();
+        const storedUser = apiService.user.getStoredUser();
 
         if (!token) {
             setLoading(false);
@@ -25,8 +24,7 @@ export function AuthProvider({ children }) {
 
         // Fetch user data from API (backend will decode JWT and return user info)
         try {
-            const res = await apiClient.get('/api/users/me');
-            const userData = res.data?.data || res.data;
+            const userData = await apiService.user.getMe();
             if (userData) {
                 setUser(userData);
                 // Set role from user data returned by backend

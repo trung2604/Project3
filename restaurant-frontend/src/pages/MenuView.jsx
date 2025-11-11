@@ -14,7 +14,7 @@ import {
 import {
     SearchOutlined
 } from '@ant-design/icons';
-import { menuService } from '../services/menuService';
+import apiService from '../services/apiService';
 import { PAGINATION } from '../constants.js';
 import { useAuth } from '../context/AuthContext';
 import Loading from '../components/Common/Loading';
@@ -44,7 +44,7 @@ const MenuView = () => {
                 ...(filters.search && filters.search.trim() !== '' && { search: filters.search })
             };
 
-            const response = await menuService.getMenuItems(params);
+            const response = await apiService.menu.getMenuItems(params);
             const data = response.data;
             setMenuItems(data.items || []);
         } catch (error) {
@@ -57,7 +57,7 @@ const MenuView = () => {
     // Load categories
     const loadCategories = async () => {
         try {
-            const response = await menuService.getCategories();
+            const response = await apiService.menu.getCategories();
             setCategories(response.data || []);
         } catch (error) {
             console.error('Error loading categories:', error);

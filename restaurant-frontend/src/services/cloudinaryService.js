@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { API_ENDPOINTS } from '../constants.js';
+import { API_ENDPOINTS, API_BASE_URL } from '../constants.js';
 
 const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/dswb2h4ny/image/upload';
 
@@ -9,7 +9,7 @@ class CloudinaryService {
      */
     async getSignature() {
         try {
-            const url = `http://localhost:8080${API_ENDPOINTS.CLOUDINARY.SIGNATURE}`;
+            const url = `${API_BASE_URL}${API_ENDPOINTS.CLOUDINARY.SIGNATURE}`;
             const response = await axios.get(url);
             return response.data;
         } catch (error) {

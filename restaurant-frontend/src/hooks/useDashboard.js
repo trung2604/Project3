@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { dashboardService } from '../services/dashboardService';
+import apiService from '../services/apiService';
 
 export const useCurrentSection = () => {
     const location = useLocation();
@@ -34,14 +34,15 @@ export const useDashboardStats = () => {
         setLoading(true);
         try {
             const [statsResponse, revenueResponse, lowStockResponse] = await Promise.all([
-                dashboardService.getStats(),
-                dashboardService.getRevenue(),
-                dashboardService.getLowStockIngredients()
+                apiService.dashboard.getStats(),
+                apiService.dashboard.getRevenue(),
+                apiService.dashboard.getLowStockIngredients()
             ]);
 
-            const statsData = statsResponse.data;
-            const revenueData = revenueResponse.data;
-            const lowStockData = lowStockResponse.data || [];
+            // apiService.dashboard methods return data directly (already unwrapped)
+            const statsData = statsResponse || {};
+            const revenueData = revenueResponse || {};
+            const lowStockData = Array.isArray(lowStockResponse) ? lowStockResponse : [];
 
             setStats({
                 totalIngredients: statsData.totalIngredients || 0,
@@ -85,8 +86,9 @@ export const useAlerts = () => {
     const loadAlerts = async () => {
         setLoading(true);
         try {
-            const response = await dashboardService.getActiveAlerts();
-            const alertsData = response.data || [];
+            const response = await apiService.dashboard.getActiveAlerts();
+            // apiService.dashboard.getActiveAlerts() returns array directly (already unwrapped)
+            const alertsData = Array.isArray(response) ? response : [];
 
             // Transform API data to match component expectations
             const transformedAlerts = alertsData.map(alert => ({

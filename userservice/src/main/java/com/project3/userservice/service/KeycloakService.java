@@ -9,6 +9,8 @@ import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 
 import java.util.HashMap;
 import java.util.List;
@@ -38,15 +40,14 @@ public class KeycloakService {
         
         for (String realmPath : realmPaths) {
             try {
-                info.token = identityClient.exchangeClientToken(
-                        TokenExchangeRequest.builder()
-                                .grant_type(KeycloakConstants.GRANT_TYPE_CLIENT_CREDENTIALS)
-                                .client_secret(keycloakProperties.getClientSecret())
-                                .client_id(keycloakProperties.getClientId())
-                                .scope(KeycloakConstants.SCOPE_OPENID)
-                                .build(),
-                        realmPath
-                );
+                MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+                form.add("grant_type", KeycloakConstants.GRANT_TYPE_CLIENT_CREDENTIALS);
+                form.add("client_id", keycloakProperties.getClientId());
+                if (keycloakProperties.getClientSecret() != null) {
+                    form.add("client_secret", keycloakProperties.getClientSecret());
+                }
+                form.add("scope", KeycloakConstants.SCOPE_OPENID);
+                info.token = identityClient.exchangeTokenForm(realmPath, form);
                 String baseRealmPath = realmPath.startsWith("/auth/") ? "/auth" : "";
                 info.adminPath = baseRealmPath + KeycloakConstants.ADMIN_REALMS_PATH + keycloakProperties.getRealm();
                 return info;
@@ -68,18 +69,15 @@ public class KeycloakService {
             try {
                 log.debug("Attempting login with Keycloak for username: {} at {}{}", 
                         username, keycloakProperties.getUrl(), realmPath);
-                TokenExchangeResponse tokenResponse = identityClient.loginUser(
-                        UserLoginRequest.builder()
-                                .grant_type(KeycloakConstants.GRANT_TYPE_PASSWORD)
-                                .client_id(keycloakProperties.getClientId())
-                                .client_secret(keycloakProperties.getClientSecret())
-                                .username(username)
-                                .password(password)
-                                .scope(String.join(" ", KeycloakConstants.SCOPE_OPENID, 
-                                        KeycloakConstants.SCOPE_PROFILE, KeycloakConstants.SCOPE_EMAIL))
-                                .build(),
-                        realmPath
-                );
+                MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+                form.add("grant_type", KeycloakConstants.GRANT_TYPE_PASSWORD);
+                form.add("client_id", keycloakProperties.getClientId());
+                form.add("client_secret", keycloakProperties.getClientSecret());
+                form.add("username", username);
+                form.add("password", password);
+                form.add("scope", String.join(" ", KeycloakConstants.SCOPE_OPENID,
+                        KeycloakConstants.SCOPE_PROFILE, KeycloakConstants.SCOPE_EMAIL));
+                TokenExchangeResponse tokenResponse = identityClient.loginUserForm(realmPath, form);
                 log.info("Login successful for username: {}", username);
                 return tokenResponse;
             } catch (Exception e) {
@@ -106,18 +104,17 @@ public class KeycloakService {
         String realmPath = KeycloakConstants.REALMS_PATH + keycloakProperties.getRealm();
         
         try {
-            TokenExchangeResponse token = identityClient.exchangeClientToken(
-                    TokenExchangeRequest.builder()
-                            .grant_type(KeycloakConstants.GRANT_TYPE_AUTHORIZATION_CODE)
-                            .client_id(keycloakProperties.getClientId())
-                            .client_secret(keycloakProperties.getClientSecret())
-                            .code(code)
-                            .redirect_uri(redirectUri)
-                            .scope(String.join(" ", KeycloakConstants.SCOPE_OPENID, 
-                                    KeycloakConstants.SCOPE_PROFILE, KeycloakConstants.SCOPE_EMAIL))
-                            .build(),
-                    realmPath
-            );
+            MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+            form.add("grant_type", KeycloakConstants.GRANT_TYPE_AUTHORIZATION_CODE);
+            form.add("client_id", keycloakProperties.getClientId());
+            if (keycloakProperties.getClientSecret() != null) {
+                form.add("client_secret", keycloakProperties.getClientSecret());
+            }
+            form.add("code", code);
+            form.add("redirect_uri", redirectUri);
+            form.add("scope", String.join(" ", KeycloakConstants.SCOPE_OPENID,
+                    KeycloakConstants.SCOPE_PROFILE, KeycloakConstants.SCOPE_EMAIL));
+            TokenExchangeResponse token = identityClient.exchangeTokenForm(realmPath, form);
             log.info("Successfully exchanged authorization code for tokens");
             return token;
         } catch (Exception e) {
@@ -173,6 +170,274 @@ public class KeycloakService {
             log.error("Failed to create user in Keycloak: {}", e.getMessage());
             throw new KeycloakException("Failed to create user in Keycloak: " + e.getMessage(), e);
         }
+    }
+    
+    /**
+     * Assign role to user in Keycloak (realm role or client role)
+     */
+    public void assignRoleToUser(String userId, String roleName) {
+        log.info("Assigning role {} to user {} in Keycloak", roleName, userId);
+        KeycloakAdminInfo adminInfo = getKeycloakAdminInfo();
+        String authHeader = KeycloakConstants.BEARER_PREFIX + adminInfo.token.getAccessToken();
+        
+        try {
+            // Try to assign as realm role first
+            try {
+                List<Map<String, Object>> realmRoles = identityClient.getRealmRoles(adminInfo.adminPath, authHeader);
+                Map<String, Object> roleToAssign = realmRoles.stream()
+                        .filter(role -> roleName.equalsIgnoreCase(role.get("name").toString()))
+                        .findFirst()
+                        .orElse(null);
+                
+                if (roleToAssign != null) {
+                    List<Map<String, Object>> rolesToAssign = List.of(roleToAssign);
+                    identityClient.assignRealmRole(adminInfo.adminPath, userId, rolesToAssign, authHeader);
+                    log.info("Successfully assigned realm role {} to user {}", roleName, userId);
+                    return;
+                }
+            } catch (Exception e) {
+                log.debug("Role {} not found as realm role, trying client role: {}", roleName, e.getMessage());
+            }
+            
+            // Try to assign as client role
+            try {
+                // Get client ID for project3
+                List<Map<String, Object>> clients = identityClient.getClients(
+                        adminInfo.adminPath, 
+                        keycloakProperties.getClientId(), 
+                        authHeader);
+                
+                if (clients == null || clients.isEmpty()) {
+                    log.warn("Client {} not found in Keycloak", keycloakProperties.getClientId());
+                    return;
+                }
+                
+                String clientUuid = clients.get(0).get("id").toString();
+                List<Map<String, Object>> clientRoles = identityClient.getClientRoles(
+                        adminInfo.adminPath, 
+                        clientUuid, 
+                        authHeader);
+                
+                Map<String, Object> roleToAssign = clientRoles.stream()
+                        .filter(role -> roleName.equalsIgnoreCase(role.get("name").toString()))
+                        .findFirst()
+                        .orElse(null);
+                
+                if (roleToAssign != null) {
+                    List<Map<String, Object>> rolesToAssign = List.of(roleToAssign);
+                    identityClient.assignClientRole(adminInfo.adminPath, userId, clientUuid, rolesToAssign, authHeader);
+                    log.info("Successfully assigned client role {} to user {}", roleName, userId);
+                    return;
+                }
+            } catch (Exception e) {
+                log.warn("Failed to assign client role {} to user {}: {}", roleName, userId, e.getMessage());
+            }
+            
+            log.warn("Role {} not found in Keycloak realm or client roles. User created but role not assigned.", roleName);
+        } catch (Exception e) {
+            log.error("Failed to assign role {} to user {}: {}", roleName, userId, e.getMessage());
+            // Don't throw exception - user is created, role assignment is best effort
+        }
+    }
+    
+    /**
+     * Create realm role in Keycloak
+     */
+    public void createRealmRole(String roleName, String description) {
+        log.info("Creating realm role {} in Keycloak", roleName);
+        KeycloakAdminInfo adminInfo = getKeycloakAdminInfo();
+        String authHeader = KeycloakConstants.BEARER_PREFIX + adminInfo.token.getAccessToken();
+        
+        try {
+            Map<String, Object> role = new HashMap<>();
+            role.put("name", roleName);
+            if (description != null && !description.isEmpty()) {
+                role.put("description", description);
+            }
+            
+            identityClient.createRealmRole(adminInfo.adminPath, role, authHeader);
+            log.info("Successfully created realm role {}", roleName);
+        } catch (FeignException e) {
+            if (e.status() == 409) {
+                log.info("Realm role {} already exists", roleName);
+            } else {
+                log.error("Failed to create realm role {}: {} - {}", roleName, e.status(), e.contentUTF8());
+                throw new KeycloakException("Failed to create realm role: " + e.contentUTF8(), e);
+            }
+        } catch (Exception e) {
+            log.error("Failed to create realm role {}: {}", roleName, e.getMessage());
+            throw new KeycloakException("Failed to create realm role: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Create client role in Keycloak
+     */
+    public void createClientRole(String roleName, String description) {
+        log.info("Creating client role {} in Keycloak", roleName);
+        KeycloakAdminInfo adminInfo = getKeycloakAdminInfo();
+        String authHeader = KeycloakConstants.BEARER_PREFIX + adminInfo.token.getAccessToken();
+        
+        try {
+            // Get client ID for project3
+            List<Map<String, Object>> clients = identityClient.getClients(
+                    adminInfo.adminPath, 
+                    keycloakProperties.getClientId(), 
+                    authHeader);
+            
+            if (clients == null || clients.isEmpty()) {
+                throw new KeycloakException("Client " + keycloakProperties.getClientId() + " not found in Keycloak");
+            }
+            
+            String clientUuid = clients.get(0).get("id").toString();
+            Map<String, Object> role = new HashMap<>();
+            role.put("name", roleName);
+            if (description != null && !description.isEmpty()) {
+                role.put("description", description);
+            }
+            
+            identityClient.createClientRole(adminInfo.adminPath, clientUuid, role, authHeader);
+            log.info("Successfully created client role {} for client {}", roleName, keycloakProperties.getClientId());
+        } catch (FeignException e) {
+            if (e.status() == 409) {
+                log.info("Client role {} already exists", roleName);
+            } else {
+                log.error("Failed to create client role {}: {} - {}", roleName, e.status(), e.contentUTF8());
+                throw new KeycloakException("Failed to create client role: " + e.contentUTF8(), e);
+            }
+        } catch (Exception e) {
+            log.error("Failed to create client role {}: {}", roleName, e.getMessage());
+            throw new KeycloakException("Failed to create client role: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Get all realm roles from Keycloak
+     */
+    public List<Map<String, Object>> getRealmRoles() {
+        log.info("Getting realm roles from Keycloak");
+        KeycloakAdminInfo adminInfo = getKeycloakAdminInfo();
+        String authHeader = KeycloakConstants.BEARER_PREFIX + adminInfo.token.getAccessToken();
+        
+        try {
+            List<Map<String, Object>> roles = identityClient.getRealmRoles(adminInfo.adminPath, authHeader);
+            log.info("Retrieved {} realm roles", roles != null ? roles.size() : 0);
+            return roles != null ? roles : List.of();
+        } catch (Exception e) {
+            log.error("Failed to get realm roles: {}", e.getMessage());
+            throw new KeycloakException("Failed to get realm roles: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Get all client roles from Keycloak for project3 client
+     */
+    public List<Map<String, Object>> getClientRoles() {
+        log.info("Getting client roles from Keycloak for client {}", keycloakProperties.getClientId());
+        KeycloakAdminInfo adminInfo = getKeycloakAdminInfo();
+        String authHeader = KeycloakConstants.BEARER_PREFIX + adminInfo.token.getAccessToken();
+        
+        try {
+            List<Map<String, Object>> clients = identityClient.getClients(
+                    adminInfo.adminPath, 
+                    keycloakProperties.getClientId(), 
+                    authHeader);
+            
+            if (clients == null || clients.isEmpty()) {
+                log.warn("Client {} not found in Keycloak", keycloakProperties.getClientId());
+                return List.of();
+            }
+            
+            String clientUuid = clients.get(0).get("id").toString();
+            List<Map<String, Object>> roles = identityClient.getClientRoles(adminInfo.adminPath, clientUuid, authHeader);
+            log.info("Retrieved {} client roles for client {}", roles != null ? roles.size() : 0, keycloakProperties.getClientId());
+            return roles != null ? roles : List.of();
+        } catch (Exception e) {
+            log.error("Failed to get client roles: {}", e.getMessage());
+            throw new KeycloakException("Failed to get client roles: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Initialize all required roles in Keycloak (realm roles or client roles)
+     * This should be called once during application startup or via admin endpoint
+     */
+    public void initializeRoles() {
+        log.info("Initializing required roles in Keycloak");
+        String[] roles = {"CUSTOMER", "STAFF", "WAREHOUSE_STAFF", "RESTAURANT_MANAGER", "ADMIN"};
+        String[] descriptions = {
+            "Khách hàng",
+            "Nhân viên phục vụ",
+            "Nhân viên kho",
+            "Quản lý nhà hàng",
+            "Quản trị viên hệ thống"
+        };
+        
+        // Try to create as client roles first (preferred for application-specific roles)
+        boolean useClientRoles = true;
+        try {
+            List<Map<String, Object>> clients = identityClient.getClients(
+                    getKeycloakAdminInfo().adminPath,
+                    keycloakProperties.getClientId(),
+                    KeycloakConstants.BEARER_PREFIX + getKeycloakAdminInfo().token.getAccessToken());
+            if (clients == null || clients.isEmpty()) {
+                useClientRoles = false;
+                log.warn("Client {} not found, will create as realm roles", keycloakProperties.getClientId());
+            }
+        } catch (Exception e) {
+            useClientRoles = false;
+            log.warn("Failed to check client, will create as realm roles: {}", e.getMessage());
+        }
+        
+        for (int i = 0; i < roles.length; i++) {
+            boolean roleCreated = false;
+            if (useClientRoles) {
+                try {
+                    createClientRole(roles[i], descriptions[i]);
+                    roleCreated = true;
+                } catch (FeignException e) {
+                    if (e.status() == 403 || e.status() == 401) {
+                        // Permission denied - fallback to realm role
+                        log.warn("Failed to create client role {} due to permission issue ({}), falling back to realm role", roles[i], e.status());
+                        try {
+                            createRealmRole(roles[i], descriptions[i]);
+                            roleCreated = true;
+                        } catch (Exception ex) {
+                            log.error("Failed to create realm role {}: {}", roles[i], ex.getMessage());
+                        }
+                    } else if (e.status() == 409) {
+                        // Role already exists
+                        log.info("Client role {} already exists", roles[i]);
+                        roleCreated = true;
+                    } else {
+                        log.error("Failed to create client role {}: {} - {}", roles[i], e.status(), e.contentUTF8());
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to create client role {}: {}", roles[i], e.getMessage());
+                    // Try realm role as fallback
+                    try {
+                        log.info("Attempting to create realm role {} as fallback", roles[i]);
+                        createRealmRole(roles[i], descriptions[i]);
+                        roleCreated = true;
+                    } catch (Exception ex) {
+                        log.error("Failed to create realm role {}: {}", roles[i], ex.getMessage());
+                    }
+                }
+            } else {
+                try {
+                    createRealmRole(roles[i], descriptions[i]);
+                    roleCreated = true;
+                } catch (Exception e) {
+                    log.error("Failed to initialize role {}: {}", roles[i], e.getMessage());
+                }
+            }
+            
+            if (!roleCreated) {
+                log.warn("Role {} was not created. Please check Keycloak permissions or create manually.", roles[i]);
+            }
+        }
+        
+        log.info("Role initialization completed");
     }
     
     /**
@@ -236,6 +501,32 @@ public class KeycloakService {
         } catch (Exception e) {
             log.error("Failed to get user {} from Keycloak: {}", userId, e.getMessage());
             throw new KeycloakException("Failed to get user from Keycloak: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Check if user exists in Keycloak
+     */
+    public boolean userExistsInKeycloak(String userId) {
+        KeycloakAdminInfo adminInfo = getKeycloakAdminInfo();
+        try {
+            identityClient.getUser(
+                    adminInfo.adminPath,
+                    userId,
+                    KeycloakConstants.BEARER_PREFIX + adminInfo.token.getAccessToken()
+            );
+            return true;
+        } catch (FeignException e) {
+            if (e.status() == 404) {
+                return false;
+            }
+            log.warn("Error checking if user {} exists in Keycloak: {} - {}", userId, e.status(), e.contentUTF8());
+            // If error, assume user exists to avoid accidental deletion
+            return true;
+        } catch (Exception e) {
+            log.warn("Error checking if user {} exists in Keycloak: {}", userId, e.getMessage());
+            // If error, assume user exists to avoid accidental deletion
+            return true;
         }
     }
     

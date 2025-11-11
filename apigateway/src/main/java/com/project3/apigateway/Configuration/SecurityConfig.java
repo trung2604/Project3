@@ -8,6 +8,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverterAdapter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
@@ -17,6 +19,7 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsWebFilter;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Arrays;
 import java.util.List;
@@ -26,7 +29,22 @@ import java.util.stream.Collectors;
 
 @Configuration
 @EnableReactiveMethodSecurity
+@Slf4j
 public class SecurityConfig {
+    
+    @org.springframework.beans.factory.annotation.Value("${cors.allowed-origins:http://localhost:5173}")
+    private String allowedOrigins;
+    
+    @org.springframework.beans.factory.annotation.Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri:http://localhost:8180/realms/project3}")
+    private String issuerUri;
+    
+    @org.springframework.beans.factory.annotation.Value("${spring.security.oauth2.resourceserver.jwt.client-id:project3}")
+    private String clientId;
+    
+    @Bean
+    public ReactiveJwtDecoder jwtDecoder() {
+        return NimbusReactiveJwtDecoder.withIssuerLocation(issuerUri).build();
+    }
     
     @Bean
     public SecurityWebFilterChain filterChain(ServerHttpSecurity http) {
@@ -39,12 +57,13 @@ public class SecurityConfig {
                                 "/api/users/register",
                                 "/api/users/*/verify-email",
                                 "/api/users/oauth/**",
-                                "/api/v1/public/**"
+                                "/api/v1/public/**",
+                                "/actuator/**"
                         ).permitAll()
                         // Users: self profile endpoints - tất cả user đã đăng nhập
                         .pathMatchers("/api/users/me", "/api/users/me/**").authenticated()
-                        // Users: admin management endpoints - chỉ ADMIN
-                        .pathMatchers("/api/users/**").hasRole("ADMIN")
+                        // Users: admin management endpoints - RESTAURANT_MANAGER và ADMIN
+                        .pathMatchers("/api/users/**").hasAnyRole("RESTAURANT_MANAGER", "ADMIN")
                         // Menu: read public, write requires restaurant staff/manager/admin
                         .pathMatchers(HttpMethod.GET, "/api/restaurant/menu/**").permitAll()
                         .pathMatchers(HttpMethod.POST, "/api/restaurant/menu/**").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
@@ -65,7 +84,10 @@ public class SecurityConfig {
                         .anyExchange().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
+                        .jwt(jwt -> jwt
+                                .jwtDecoder(jwtDecoder())
+                                .jwtAuthenticationConverter(jwtAuthenticationConverter())
+                        )
                 );
         return http.build();
     }
@@ -73,7 +95,12 @@ public class SecurityConfig {
     @Bean
     public org.springframework.web.cors.reactive.CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration corsConfig = new CorsConfiguration();
-        corsConfig.setAllowedOrigins(List.of("http://localhost:5173"));
+        // Support multiple origins separated by comma
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
+        corsConfig.setAllowedOrigins(origins.isEmpty() ? List.of("http://localhost:5173") : origins);
         corsConfig.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         corsConfig.setAllowedHeaders(List.of("*"));
         corsConfig.setAllowCredentials(true);
@@ -110,21 +137,38 @@ public class SecurityConfig {
         // client roles (e.g., project3)
         Collection<String> clientRoles = List.of();
         Map<String, Object> resourceAccess = jwt.getClaim("resource_access");
-        if (resourceAccess != null) {
-            for (Object clientObj : resourceAccess.values()) {
-                if (clientObj instanceof Map) {
-                    Object roles = ((Map<?, ?>) clientObj).get("roles");
-                    if (roles instanceof Collection<?>) {
-                        clientRoles = ((Collection<?>) roles).stream().map(Object::toString).collect(Collectors.toList());
-                        break;
+        if (resourceAccess != null && resourceAccess instanceof Map) {
+            // Try to get roles from specific client (project3)
+            Object clientAccess = resourceAccess.get(clientId);
+            if (clientAccess instanceof Map) {
+                Object roles = ((Map<?, ?>) clientAccess).get("roles");
+                if (roles instanceof Collection<?>) {
+                    clientRoles = ((Collection<?>) roles).stream().map(Object::toString).collect(Collectors.toList());
+                }
+            }
+            // Fallback: if not found in specific client, try first available client
+            if (clientRoles.isEmpty()) {
+                for (Object clientObj : resourceAccess.values()) {
+                    if (clientObj instanceof Map) {
+                        Object roles = ((Map<?, ?>) clientObj).get("roles");
+                        if (roles instanceof Collection<?>) {
+                            clientRoles = ((Collection<?>) roles).stream().map(Object::toString).collect(Collectors.toList());
+                            break;
+                        }
                     }
                 }
             }
         }
-        return java.util.stream.Stream.concat(realmRoles.stream(), clientRoles.stream())
+        
+        Collection<GrantedAuthority> authorities = java.util.stream.Stream.concat(realmRoles.stream(), clientRoles.stream())
                 .distinct()
                 .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r.toUpperCase())
                 .map(SimpleGrantedAuthority::new)
                 .collect(Collectors.toSet());
+        
+        log.debug("Extracted authorities for user: realmRoles={}, clientRoles={}, authorities={}", 
+                realmRoles, clientRoles, authorities.stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList()));
+        
+        return authorities;
     }
 }

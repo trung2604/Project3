@@ -48,30 +48,39 @@ public class UserServiceImpl implements IUserService {
             throw new AuthenticationException("Invalid username or password. Please verify your credentials or contact administrator if account is inactive.");
         }
 
-        // If user is INACTIVE, check if email is verified in Keycloak
+        // Handle non-active statuses explicitly
         if (user.getStatus() != User.UserStatus.ACTIVE) {
-            try {
-                Map<String, Object> kcUser = keycloakService.getUser(user.getUserId());
-                Boolean emailVerified = extractBooleanValue(kcUser, "emailVerified");
-                
-                if (Boolean.TRUE.equals(emailVerified)) {
-                    log.info("Email verified in Keycloak for user: {}. Activating user.", request.getUsername());
-                    user.setStatus(User.UserStatus.ACTIVE);
-                    userRepository.save(user);
-                    
-                    // Enable user in Keycloak if not already enabled
-                    Boolean enabled = extractBooleanValue(kcUser, "enabled");
-                    if (!Boolean.TRUE.equals(enabled)) {
-                        keycloakService.enableUser(user.getUserId());
+            if (user.getStatus() == User.UserStatus.BANNED) {
+                log.warn("Banned user attempted login: {}", request.getUsername());
+                throw new AuthenticationException("User account is banned. Please contact administrator.");
+            }
+            if (user.getStatus() == User.UserStatus.INACTIVE) {
+                // For INACTIVE (typically awaiting email verification), check emailVerified in Keycloak
+                try {
+                    Map<String, Object> kcUser = keycloakService.getUser(user.getUserId());
+                    Boolean emailVerified = extractBooleanValue(kcUser, "emailVerified");
+                    if (Boolean.TRUE.equals(emailVerified)) {
+                        log.info("Email verified in Keycloak for user: {}. Activating user.", request.getUsername());
+                        user.setStatus(User.UserStatus.ACTIVE);
+                        userRepository.save(user);
+                        // Ensure user is enabled in Keycloak
+                        Boolean enabled = extractBooleanValue(kcUser, "enabled");
+                        if (!Boolean.TRUE.equals(enabled)) {
+                            keycloakService.enableUser(user.getUserId());
+                        }
+                    } else {
+                        log.warn("Login attempt for inactive user with unverified email: {}. Status: {}", 
+                                request.getUsername(), user.getStatus());
+                        throw new AuthenticationException("User account is not active. Please verify your email before logging in.");
                     }
-                } else {
-                    log.warn("Login attempt for inactive user with unverified email: {}. Status: {}", 
-                            request.getUsername(), user.getStatus());
-                    throw new AuthenticationException("User account is not active. Please verify your email before logging in.");
+                } catch (Exception e) {
+                    log.error("Failed to check email verification status: {}", e.getMessage());
+                    throw new AuthenticationException("User account is not active. Please verify your email.");
                 }
-            } catch (Exception e) {
-                log.error("Failed to check email verification status: {}", e.getMessage());
-                throw new AuthenticationException("User account is not active. Please verify your email.");
+            } else {
+                // Any other undefined non-active status
+                log.warn("Login blocked for user {} due to unsupported status: {}", request.getUsername(), user.getStatus());
+                throw new AuthenticationException("User account status does not allow login.");
             }
         }
 
@@ -115,6 +124,15 @@ public class UserServiceImpl implements IUserService {
         // Create user in Keycloak
         String keycloakUserId = keycloakService.createUser(keycloakUserRequest);
         log.info("User created in Keycloak with userId: {}", keycloakUserId);
+
+        // Assign role to user in Keycloak (so it appears in JWT token)
+        if (request.getRole() != null) {
+            try {
+                keycloakService.assignRoleToUser(keycloakUserId, request.getRole().name());
+            } catch (Exception e) {
+                log.warn("Failed to assign role to user in Keycloak, but user was created: {}", e.getMessage());
+            }
+        }
 
         // Create user in local database
         User user = buildUserEntity(keycloakUserId, request);
@@ -187,23 +205,31 @@ public class UserServiceImpl implements IUserService {
         User user = userRepository.findByUserId(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found with userId: " + userId));
         
-        // Delete user in Keycloak first
+        // Delete user in Keycloak first - MUST succeed before deleting from database
         try {
             keycloakService.deleteUser(user.getUserId());
+            log.info("User {} deleted successfully from Keycloak", user.getUserId());
         } catch (Exception e) {
             log.error("Failed to delete user in Keycloak: {}. Error: {}", user.getUserId(), e.getMessage());
-            // Continue with local deletion even if Keycloak deletion fails
+            throw new KeycloakException("Cannot delete user: Failed to delete user from Keycloak. " + e.getMessage(), e);
         }
 
+        // Delete avatar from Cloudinary (non-blocking, but log if fails)
         if (user.getAvatarPublicId() != null && !user.getAvatarPublicId().isEmpty()) {
             log.info("Deleting avatar with publicId: {} for user: {}", user.getAvatarPublicId(), userId);
-            boolean deleted = cloudinaryService.deleteImage(user.getAvatarPublicId());
-            if (!deleted) {
-                log.warn("Failed to delete avatar from Cloudinary for user: {}, but continuing with user deletion", userId);
+            try {
+                boolean deleted = cloudinaryService.deleteImage(user.getAvatarPublicId());
+                if (!deleted) {
+                    log.warn("Failed to delete avatar from Cloudinary for user: {}, but continuing with user deletion", userId);
+                }
+            } catch (Exception e) {
+                log.warn("Error deleting avatar from Cloudinary for user {}: {}, but continuing with user deletion", userId, e.getMessage());
             }
         }
         
+        // Delete user from database - only if Keycloak deletion succeeded
         userRepository.delete(user);
+        log.info("User {} deleted successfully from database", userId);
     }
 
     @Override
@@ -354,7 +380,82 @@ public class UserServiceImpl implements IUserService {
 
     @Override
     public TokenExchangeResponse exchangeAuthorizationCode(OAuthCodeExchangeRequest req) {
-        return keycloakService.exchangeAuthorizationCode(req.getCode(), req.getRedirectUri());
+        TokenExchangeResponse tokenResponse = keycloakService.exchangeAuthorizationCode(req.getCode(), req.getRedirectUri());
+        
+        // After successful token exchange, check and activate user if email is verified
+        try {
+            // Decode JWT token to get user ID (sub claim)
+            String accessToken = tokenResponse.getAccessToken();
+            String userId = extractUserIdFromToken(accessToken);
+            
+            if (userId != null) {
+                // Find user in database
+                userRepository.findByUserId(userId).ifPresent(user -> {
+                    // If user is INACTIVE, check if email is verified in Keycloak
+                    if (user.getStatus() == User.UserStatus.INACTIVE) {
+                        try {
+                            Map<String, Object> kcUser = keycloakService.getUser(userId);
+                            Boolean emailVerified = extractBooleanValue(kcUser, "emailVerified");
+                            
+                            if (Boolean.TRUE.equals(emailVerified)) {
+                                log.info("Email verified in Keycloak for user: {}. Activating user during token exchange.", userId);
+                                user.setStatus(User.UserStatus.ACTIVE);
+                                userRepository.save(user);
+                                
+                                // Ensure user is enabled in Keycloak
+                                Boolean enabled = extractBooleanValue(kcUser, "enabled");
+                                if (!Boolean.TRUE.equals(enabled)) {
+                                    keycloakService.enableUser(userId);
+                                }
+                            }
+                        } catch (Exception e) {
+                            log.warn("Failed to check email verification status during token exchange for user {}: {}", userId, e.getMessage());
+                        }
+                    } else if (user.getStatus() == User.UserStatus.BANNED) {
+                        log.warn("Banned user attempted login via OAuth: {}", userId);
+                        throw new AuthenticationException("User account is banned. Please contact administrator.");
+                    }
+                });
+            }
+        } catch (Exception e) {
+            log.warn("Failed to process user activation during token exchange: {}", e.getMessage());
+            // Don't fail the token exchange if activation check fails
+        }
+        
+        return tokenResponse;
+    }
+    
+    /**
+     * Extract user ID from JWT token (sub claim)
+     */
+    private String extractUserIdFromToken(String token) {
+        try {
+            // JWT token format: header.payload.signature
+            String[] parts = token.split("\\.");
+            if (parts.length != 3) {
+                log.warn("Invalid JWT token format");
+                return null;
+            }
+            
+            // Decode payload (base64)
+            String payload = parts[1];
+            // Add padding if needed
+            int padding = 4 - (payload.length() % 4);
+            if (padding != 4) {
+                payload = payload + "=".repeat(padding);
+            }
+            
+            byte[] decodedBytes = java.util.Base64.getUrlDecoder().decode(payload);
+            String decodedPayload = new String(decodedBytes, java.nio.charset.StandardCharsets.UTF_8);
+            
+            // Parse JSON to get "sub" claim
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode jsonNode = mapper.readTree(decodedPayload);
+            return jsonNode.has("sub") ? jsonNode.get("sub").asText() : null;
+        } catch (Exception e) {
+            log.warn("Failed to extract user ID from token: {}", e.getMessage());
+            return null;
+        }
     }
 
     private UserCreationRequest buildKeycloakUserRequest(CreateUserRequestDTO request) {
@@ -490,6 +591,62 @@ public class UserServiceImpl implements IUserService {
         } catch (Exception e) {
             log.error("Failed to sync email verification for user {}: {}", userId, e.getMessage());
             throw new KeycloakException("Failed to sync email verification: " + e.getMessage(), e);
+        }
+    }
+    
+    @Override
+    public void initializeKeycloakRoles() {
+        log.info("Initializing Keycloak roles via UserService");
+        keycloakService.initializeRoles();
+    }
+    
+    @Override
+    public List<Map<String, Object>> getRealmRoles() {
+        return keycloakService.getRealmRoles();
+    }
+    
+    @Override
+    public List<Map<String, Object>> getClientRoles() {
+        return keycloakService.getClientRoles();
+    }
+    
+    @Override
+    @Transactional
+    public void syncDeletedUsersFromKeycloak() {
+        log.info("Starting sync: checking for users deleted in Keycloak");
+        try {
+            List<User> allUsers = userRepository.findAll();
+            int deletedCount = 0;
+            
+            for (User user : allUsers) {
+                if (!keycloakService.userExistsInKeycloak(user.getUserId())) {
+                    log.info("User {} (email: {}) was deleted in Keycloak, deleting from database", 
+                            user.getUserId(), user.getEmail());
+                    
+                    // Delete avatar from Cloudinary (non-blocking)
+                    if (user.getAvatarPublicId() != null && !user.getAvatarPublicId().isEmpty()) {
+                        try {
+                            cloudinaryService.deleteImage(user.getAvatarPublicId());
+                        } catch (Exception e) {
+                            log.warn("Failed to delete avatar from Cloudinary for user {}: {}", 
+                                    user.getUserId(), e.getMessage());
+                        }
+                    }
+                    
+                    // Delete from database
+                    userRepository.delete(user);
+                    deletedCount++;
+                    log.info("User {} deleted from database", user.getUserId());
+                }
+            }
+            
+            if (deletedCount > 0) {
+                log.info("Sync completed: {} users deleted from database", deletedCount);
+            } else {
+                log.debug("Sync completed: no users to delete");
+            }
+        } catch (Exception e) {
+            log.error("Error during sync deleted users from Keycloak: {}", e.getMessage(), e);
         }
     }
 }

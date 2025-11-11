@@ -14,6 +14,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -306,6 +307,51 @@ public class UserController {
         } catch (RuntimeException e) {
             ErrorResponseDTO error = ErrorResponseDTO.badRequest(
                     e.getMessage() != null ? e.getMessage() : "Failed to update avatar",
+                    httpRequest.getRequestURI()
+            );
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+        }
+    }
+
+    @PostMapping("/admin/initialize-roles")
+    public ResponseEntity<ApiResponseDTO<String>> initializeRoles(HttpServletRequest httpRequest) {
+        try {
+            userService.initializeKeycloakRoles();
+            return ResponseEntity.ok(ApiResponseDTO.success("Roles initialized successfully", "All required roles have been created in Keycloak"));
+        } catch (RuntimeException e) {
+            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
+                    e.getMessage() != null ? e.getMessage() : "Failed to initialize roles",
+                    httpRequest.getRequestURI()
+            );
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+        }
+    }
+    
+    @GetMapping("/admin/realm-roles")
+    public ResponseEntity<ApiResponseDTO<List<Map<String, Object>>>> getRealmRoles(HttpServletRequest httpRequest) {
+        try {
+            List<Map<String, Object>> roles = userService.getRealmRoles();
+            return ResponseEntity.ok(ApiResponseDTO.success(roles, "Realm roles retrieved successfully"));
+        } catch (RuntimeException e) {
+            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
+                    e.getMessage() != null ? e.getMessage() : "Failed to get realm roles",
+                    httpRequest.getRequestURI()
+            );
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+        }
+    }
+    
+    @GetMapping("/admin/client-roles")
+    public ResponseEntity<ApiResponseDTO<List<Map<String, Object>>>> getClientRoles(HttpServletRequest httpRequest) {
+        try {
+            List<Map<String, Object>> roles = userService.getClientRoles();
+            return ResponseEntity.ok(ApiResponseDTO.success(roles, "Client roles retrieved successfully"));
+        } catch (RuntimeException e) {
+            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
+                    e.getMessage() != null ? e.getMessage() : "Failed to get client roles",
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

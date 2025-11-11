@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import apiClient from '../services/api';
+import apiService from '../services/apiService';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { getRedirectPathByRole } from '../utils/auth';
@@ -29,8 +29,7 @@ export default function AuthCallback() {
 
         (async () => {
             try {
-                const res = await apiClient.post('/api/users/oauth/token-exchange', { code, redirectUri });
-                const data = res.data?.data || res.data;
+                const data = await apiService.user.exchangeToken(code, redirectUri);
                 if (data?.accessToken) {
                     // Login via context
                     login(data.accessToken, data.refreshToken, null);

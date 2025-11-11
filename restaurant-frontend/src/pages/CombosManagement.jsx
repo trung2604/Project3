@@ -35,7 +35,7 @@ import {
     DollarOutlined,
     MinusOutlined
 } from '@ant-design/icons';
-import { menuService } from '../services/menuService';
+import apiService from '../services/apiService';
 import { PAGINATION, STATUS } from '../constants.js';
 
 const { Option } = Select;
@@ -66,7 +66,7 @@ const CombosManagement = () => {
     const loadCombos = async () => {
         setLoading(true);
         try {
-            const response = await menuService.getCombos();
+            const response = await apiService.menu.getCombos();
             setCombos(response.data || []);
             setPagination(prev => ({
                 ...prev,
@@ -83,7 +83,7 @@ const CombosManagement = () => {
     // Load menu items for combo selection
     const loadMenuItems = async () => {
         try {
-            const response = await menuService.getMenuItems();
+            const response = await apiService.menu.getMenuItems();
             // Handle both direct array response and paginated response
             const data = response.data;
             if (Array.isArray(data)) {
@@ -134,10 +134,10 @@ const CombosManagement = () => {
             const values = await form.validateFields();
 
             if (modalType === 'create') {
-                await menuService.createCombo(values);
+                await apiService.menu.createCombo(values);
                 message.success('Tạo combo thành công');
             } else if (modalType === 'edit') {
-                await menuService.updateCombo(selectedCombo.id, values);
+                await apiService.menu.updateCombo(selectedCombo.id, values);
                 message.success('Cập nhật combo thành công');
             }
 
@@ -152,7 +152,7 @@ const CombosManagement = () => {
     // Delete combo
     const handleDelete = async (id) => {
         try {
-            await menuService.deleteCombo(id);
+            await apiService.menu.deleteCombo(id);
             message.success('Xóa combo thành công');
             loadCombos();
         } catch (error) {

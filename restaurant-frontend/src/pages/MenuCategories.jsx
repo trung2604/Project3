@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Input, Space, Tag, App, Modal, Form } from 'antd';
 import { ReloadOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { menuService } from '../services/menuService';
+import apiService from '../services/apiService';
 import { canManageMenu } from '../utils/auth';
 import { useAuth } from '../context/AuthContext';
 import Loading from '../components/Common/Loading';
@@ -41,7 +41,7 @@ const MenuCategories = () => {
     const load = async () => {
         setLoading(true);
         try {
-            const res = await menuService.getCategories();
+            const res = await apiService.menu.getCategories();
             setCategories(res.data || []);
         } catch (e) {
             message.error('Lỗi tải danh mục');
@@ -70,7 +70,7 @@ const MenuCategories = () => {
                     }}>Sửa</Button>
                     <Button size="small" icon={<DeleteOutlined />} danger onClick={async () => {
                         try {
-                            await menuService.deleteCategory(record.categoryId);
+                            await apiService.menu.deleteCategory(record.categoryId);
                             message.success('Đã xóa');
                             load();
                         } catch {
@@ -92,10 +92,10 @@ const MenuCategories = () => {
         try {
             const values = await form.validateFields();
             if (editing) {
-                await menuService.updateCategory(editing.categoryId, values);
+                await apiService.menu.updateCategory(editing.categoryId, values);
                 message.success('Cập nhật thành công');
             } else {
-                await menuService.createCategory(values);
+                await apiService.menu.createCategory(values);
                 message.success('Tạo thành công');
             }
             setModalVisible(false);

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Table, Button, Input, Space, Tag, App, Modal, Form, InputNumber, Switch } from 'antd';
 import { ReloadOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { menuService } from '../services/menuService';
+import apiService from '../services/apiService';
 import { canManageMenu } from '../utils/auth';
 import { useAuth } from '../context/AuthContext';
 import Loading from '../components/Common/Loading';
@@ -39,7 +39,7 @@ const MenuCombos = () => {
     const load = async () => {
         setLoading(true);
         try {
-            const res = await menuService.getCombos();
+            const res = await apiService.menu.getCombos();
             setCombos(res.data || []);
         } catch (e) {
             message.error('Lỗi tải combo');
@@ -69,7 +69,7 @@ const MenuCombos = () => {
                     }}>Sửa</Button>
                     <Button size="small" icon={<DeleteOutlined />} danger onClick={async () => {
                         try {
-                            await menuService.deleteCombo(record.comboId);
+                            await apiService.menu.deleteCombo(record.comboId);
                             message.success('Đã xóa');
                             load();
                         } catch {
@@ -91,10 +91,10 @@ const MenuCombos = () => {
         try {
             const values = await form.validateFields();
             if (editing) {
-                await menuService.updateCombo(editing.comboId, values);
+                await apiService.menu.updateCombo(editing.comboId, values);
                 message.success('Cập nhật thành công');
             } else {
-                await menuService.createCombo(values);
+                await apiService.menu.createCombo(values);
                 message.success('Tạo thành công');
             }
             setModalVisible(false);

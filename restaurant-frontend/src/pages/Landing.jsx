@@ -113,7 +113,6 @@ export default function Landing() {
                     animation: 'fadeInUp 0.8s ease-out 0.2s both'
                 }}>
                     <p style={{
-                        margin: 0,
                         color: '#374151',
                         fontSize: '1.125rem',
                         lineHeight: '1.8',

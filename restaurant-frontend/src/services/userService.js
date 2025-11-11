@@ -47,6 +47,36 @@ export const userService = {
         const data = res.data?.data || res.data;
         if (data) localStorage.setItem('user', JSON.stringify(data));
         return data;
+    },
+
+    // Admin methods
+    async createUser(payload) {
+        const res = await apiClient.post(`${USERS_BASE}`, payload);
+        return res.data?.data || res.data;
+    },
+
+    async getAllUsers(params = {}) {
+        const queryParams = new URLSearchParams();
+        if (params.page !== undefined) queryParams.append('page', params.page);
+        if (params.size !== undefined) queryParams.append('size', params.size);
+        if (params.search) queryParams.append('search', params.search);
+        if (params.role) queryParams.append('role', params.role);
+        if (params.status) queryParams.append('status', params.status);
+
+        const queryString = queryParams.toString();
+        const url = queryString ? `${USERS_BASE}?${queryString}` : USERS_BASE;
+        const res = await apiClient.get(url);
+        return res.data?.data || res.data;
+    },
+
+    async deleteUser(userId) {
+        const res = await apiClient.delete(`${USERS_BASE}/${userId}`);
+        return res.data?.data || res.data;
+    },
+
+    async toggleUserStatus(userId, status) {
+        const res = await apiClient.patch(`${USERS_BASE}/${userId}/status?status=${status}`);
+        return res.data?.data || res.data;
     }
 };
 

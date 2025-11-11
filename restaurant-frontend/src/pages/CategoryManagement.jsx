@@ -29,7 +29,7 @@ import {
     UploadOutlined,
     SettingOutlined
 } from '@ant-design/icons';
-import { menuService } from '../services/menuService';
+import apiService from '../services/apiService';
 import { PAGINATION, STATUS } from '../constants.js';
 
 const { Option } = Select;
@@ -59,7 +59,7 @@ const CategoryManagement = () => {
     const loadCategories = async () => {
         setLoading(true);
         try {
-            const response = await menuService.getCategories();
+            const response = await apiService.menu.getCategories();
             setCategories(response.data || []);
             setPagination(prev => ({
                 ...prev,
@@ -104,10 +104,10 @@ const CategoryManagement = () => {
             const values = await form.validateFields();
 
             if (modalType === 'create') {
-                await menuService.createCategory(values);
+                await apiService.menu.createCategory(values);
                 message.success('Tạo danh mục thành công');
             } else if (modalType === 'edit') {
-                await menuService.updateCategory(selectedCategory.id, values);
+                await apiService.menu.updateCategory(selectedCategory.id, values);
                 message.success('Cập nhật danh mục thành công');
             }
 
@@ -122,7 +122,7 @@ const CategoryManagement = () => {
     // Delete category
     const handleDelete = async (id) => {
         try {
-            await menuService.deleteCategory(id);
+            await apiService.menu.deleteCategory(id);
             message.success('Xóa danh mục thành công');
             loadCategories();
         } catch (error) {

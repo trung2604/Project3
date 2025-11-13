@@ -87,27 +87,23 @@ const InventoryManagement = () => {
     const [uploading, setUploading] = useState(false);
     const [imagePreview, setImagePreview] = useState(null);
 
-    // Load ingredients data
     const loadIngredients = async (page = 1, size = PAGINATION.DEFAULT_PAGE_SIZE) => {
         setLoading(true);
         try {
             const params = {
-                page: page - 1, // Backend uses 0-based pagination
+                page: page - 1,
                 size,
-                // Only include non-empty filters
                 ...(filters.category && filters.category.trim() !== '' && { category: filters.category }),
                 ...(filters.active !== null && filters.active !== undefined && { active: filters.active }),
                 ...(filters.search && filters.search.trim() !== '' && { search: filters.search })
             };
 
             const response = await apiService.inventory.getIngredients(params);
-            // apiService already unwraps the response
-            const data = response?.data || response;
-            setIngredients(data.ingredients || []);
+            setIngredients(response?.ingredients || []);
             setPagination(prev => ({
                 ...prev,
                 current: page,
-                total: data.totalElements || 0
+                total: response?.totalElements || 0
             }));
         } catch (error) {
             message.error('Lỗi khi tải dữ liệu nguyên liệu');
@@ -142,19 +138,46 @@ const InventoryManagement = () => {
         setModalVisible(true);
 
         if (type === 'edit' && ingredient) {
-            // Safely handle date fields for DatePicker
+            // Reset form first to clear any initialValues
+            form.resetFields();
+
+            // Prepare form values - ensure all fields are explicitly set with proper defaults
             const formValues = {
-                ...ingredient,
+                name: ingredient.name || '',
+                description: ingredient.description || '',
+                category: ingredient.category || '',
+                unit: ingredient.unit || '',
+                initialStock: ingredient.currentStock !== null && ingredient.currentStock !== undefined
+                    ? Number(ingredient.currentStock)
+                    : (ingredient.initialStock !== null && ingredient.initialStock !== undefined ? Number(ingredient.initialStock) : 0),
+                minStockLevel: ingredient.minStockLevel !== null && ingredient.minStockLevel !== undefined ? Number(ingredient.minStockLevel) : 0,
+                maxStockLevel: ingredient.maxStockLevel !== null && ingredient.maxStockLevel !== undefined ? Number(ingredient.maxStockLevel) : 0,
+                unitCost: ingredient.unitCost !== null && ingredient.unitCost !== undefined ? Number(ingredient.unitCost) : 0,
+                currency: ingredient.currency || 'VND',
+                supplierName: ingredient.supplierName || '',
+                supplierContact: ingredient.supplierContact || '',
                 expiryDate: ingredient.expiryDate ? dayjs(ingredient.expiryDate) : null,
-                imageUrl: ingredient.imageUrl || undefined,
-                imagePublicId: ingredient.imagePublicId || undefined
+                imageUrl: ingredient.imageUrl || '',
+                imagePublicId: ingredient.imagePublicId || ''
             };
-            form.setFieldsValue(formValues);
-            if (ingredient.imageUrl) {
-                setImagePreview(ingredient.imageUrl);
-            } else {
-                setImagePreview(null);
-            }
+
+            // Use setTimeout to ensure modal and form are fully rendered
+            setTimeout(() => {
+                // Set all form values
+                form.setFieldsValue(formValues);
+
+                // Force update to ensure all fields are rendered
+                form.validateFields().catch(() => {
+                    // Ignore validation errors, we just want to trigger a re-render
+                });
+
+                // Set image preview
+                if (ingredient.imageUrl) {
+                    setImagePreview(ingredient.imageUrl);
+                } else {
+                    setImagePreview(null);
+                }
+            }, 150);
         } else {
             form.resetFields();
             setImagePreview(null);
@@ -173,6 +196,15 @@ const InventoryManagement = () => {
                 await apiService.inventory.createIngredient(values);
                 message.success('Tạo nguyên liệu thành công');
             } else if (modalType === 'edit') {
+                // Ensure imageUrl is preserved if not changed
+                if (!values.imageUrl && selectedIngredient?.imageUrl) {
+                    values.imageUrl = selectedIngredient.imageUrl;
+                    values.imagePublicId = selectedIngredient.imagePublicId;
+                }
+                // Map initialStock back to currentStock for update
+                if (values.initialStock !== undefined) {
+                    values.currentStock = values.initialStock;
+                }
                 await apiService.inventory.updateIngredient(selectedIngredient.ingredientId, values);
                 message.success('Cập nhật nguyên liệu thành công');
             } else if (modalType === 'stock-in') {
@@ -190,6 +222,8 @@ const InventoryManagement = () => {
             }
 
             setModalVisible(false);
+            form.resetFields();
+            setImagePreview(null);
             loadIngredients(pagination.current, pagination.pageSize);
         } catch (error) {
             message.error('Có lỗi xảy ra khi thực hiện thao tác');
@@ -225,14 +259,12 @@ const InventoryManagement = () => {
             title: 'Hình ảnh',
             dataIndex: 'imageUrl',
             key: 'imageUrl',
-            width: 80,
             render: (imageUrl) => (
                 <Image
                     width={60}
                     height={60}
                     src={imageUrl || '/placeholder-food.jpg'}
                     fallback="/placeholder-food.jpg"
-                    style={{ objectFit: 'cover', borderRadius: 8 }}
                 />
             ),
         },
@@ -242,8 +274,10 @@ const InventoryManagement = () => {
             key: 'name',
             render: (text, record) => (
                 <div>
-                    <div className="font-medium">{text}</div>
-                    <div className="text-sm text-gray-500">{record.description}</div>
+                    <div>{text}</div>
+                    {record.description && (
+                        <div style={{ fontSize: 12, color: '#8c8c8c' }}>{record.description}</div>
+                    )}
                 </div>
             ),
         },
@@ -259,8 +293,8 @@ const InventoryManagement = () => {
             key: 'currentStock',
             render: (stock, record) => (
                 <div>
-                    <div className="font-medium">{stock} {record.unit}</div>
-                    <div className="text-sm text-gray-500">
+                    <div>{stock} {record.unit}</div>
+                    <div style={{ fontSize: 12, color: '#8c8c8c' }}>
                         Min: {record.minStockLevel} | Max: {record.maxStockLevel}
                     </div>
                 </div>
@@ -272,8 +306,8 @@ const InventoryManagement = () => {
             key: 'unitCost',
             render: (cost, record) => (
                 <div>
-                    <div className="font-medium">{cost?.toLocaleString()} {record.currency}</div>
-                    <div className="text-sm text-gray-500">/ {record.unit}</div>
+                    <div>{cost?.toLocaleString()} {record.currency}</div>
+                    <div style={{ fontSize: 12, color: '#8c8c8c' }}>/ {record.unit}</div>
                 </div>
             ),
         },
@@ -283,8 +317,10 @@ const InventoryManagement = () => {
             key: 'supplierName',
             render: (supplier, record) => (
                 <div>
-                    <div className="font-medium">{supplier}</div>
-                    <div className="text-sm text-gray-500">{record.supplierContact}</div>
+                    <div>{supplier}</div>
+                    {record.supplierContact && (
+                        <div style={{ fontSize: 12, color: '#8c8c8c' }}>{record.supplierContact}</div>
+                    )}
                 </div>
             ),
         },
@@ -301,13 +337,14 @@ const InventoryManagement = () => {
         {
             title: 'Thao tác',
             key: 'actions',
+            fixed: 'right',
+            width: 280,
             render: (_, record) => (
-                <Space>
+                <Space size="small" wrap>
                     <Button
                         size="small"
                         icon={<EditOutlined />}
                         onClick={() => showModal('edit', record)}
-                        disabled={!record.active}
                     >
                         Sửa
                     </Button>
@@ -346,21 +383,6 @@ const InventoryManagement = () => {
                         Kiểm kê
                     </Button>
                     <Popconfirm
-                        title="Bạn có chắc muốn xóa nguyên liệu này?"
-                        onConfirm={() => handleDeleteIngredient(record.ingredientId)}
-                        okText="Xóa"
-                        cancelText="Hủy"
-                    >
-                        <Button
-                            size="small"
-                            icon={<DeleteOutlined />}
-                            danger
-                            disabled={!record.active}
-                        >
-                            Xóa
-                        </Button>
-                    </Popconfirm>
-                    <Popconfirm
                         title={record.active ? "Bạn có chắc muốn tạm dừng nguyên liệu này?" : "Bạn có chắc muốn kích hoạt nguyên liệu này?"}
                         onConfirm={() => handleToggleActive(record.ingredientId, !record.active)}
                         okText={record.active ? "Tạm dừng" : "Kích hoạt"}
@@ -372,6 +394,20 @@ const InventoryManagement = () => {
                             type={record.active ? "default" : "primary"}
                         >
                             {record.active ? "Tạm dừng" : "Kích hoạt"}
+                        </Button>
+                    </Popconfirm>
+                    <Popconfirm
+                        title="Bạn có chắc muốn xóa nguyên liệu này?"
+                        onConfirm={() => handleDeleteIngredient(record.ingredientId)}
+                        okText="Xóa"
+                        cancelText="Hủy"
+                    >
+                        <Button
+                            size="small"
+                            icon={<DeleteOutlined />}
+                            danger
+                        >
+                            Xóa
                         </Button>
                     </Popconfirm>
                 </Space>
@@ -481,7 +517,11 @@ const InventoryManagement = () => {
                     </Upload>
                 </div>
                 {uploading && <div style={{ marginTop: 8, color: '#1890ff' }}>Đang upload...</div>}
-                <Form.Item name="imageUrl" style={{ display: 'none' }} rules={[{ required: true, message: 'Vui lòng upload hình ảnh' }]}>
+                <Form.Item
+                    name="imageUrl"
+                    style={{ display: 'none' }}
+                    rules={modalType === 'create' ? [{ required: true, message: 'Vui lòng upload hình ảnh' }] : []}
+                >
                     <Input />
                 </Form.Item>
                 <Form.Item name="imagePublicId" style={{ display: 'none' }}>
@@ -527,8 +567,8 @@ const InventoryManagement = () => {
                     <Col span={12}>
                         <Form.Item
                             name="initialStock"
-                            label="Tồn kho ban đầu"
-                            rules={[{ required: true, message: 'Vui lòng nhập tồn kho ban đầu' }]}
+                            label={modalType === 'edit' ? "Tồn kho hiện tại" : "Tồn kho ban đầu"}
+                            rules={[{ required: true, message: modalType === 'edit' ? 'Vui lòng nhập tồn kho hiện tại' : 'Vui lòng nhập tồn kho ban đầu' }]}
                         >
                             <InputNumber min={0} style={{ width: '100%' }} />
                         </Form.Item>
@@ -564,7 +604,6 @@ const InventoryManagement = () => {
                 <Form.Item
                     name="currency"
                     label="Tiền tệ"
-                    initialValue="VND"
                 >
                     <Select>
                         <Option value="VND">VND</Option>
@@ -736,7 +775,6 @@ const InventoryManagement = () => {
                         pageSizeOptions: PAGINATION.PAGE_SIZE_OPTIONS,
                     }}
                     onChange={handleTableChange}
-                    scroll={{ x: 1200 }}
                 />
             </Card>
 
@@ -753,9 +791,6 @@ const InventoryManagement = () => {
                 <Form
                     form={form}
                     layout="vertical"
-                    initialValues={{
-                        expiryDate: null
-                    }}
                     preserve={false}
                 >
                     {getFormFields()}

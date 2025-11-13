@@ -7,6 +7,7 @@ import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
+import reactor.core.publisher.Mono;
 
 @Slf4j
 @Component
@@ -33,17 +34,19 @@ public class JwtFilter extends AbstractGatewayFilterFactory<JwtFilter.Config> {
                 return chain.filter(exchange);
             }
             
+            // Try to get Principal (JWT token should be validated by Spring Security first)
+            // This filter runs AFTER Spring Security authentication
             return exchange.getPrincipal()
                     .cast(JwtAuthenticationToken.class)
-                    .flatMap(jwtToken -> {
+                    .map(jwtToken -> {
                         try {
                             var claims = jwtToken.getToken().getClaims();
                             var userId = claims.get("sub");
                             var username = claims.get("preferred_username");
                             
                             if (userId == null || username == null) {
-                                log.warn("Missing required claims in JWT token");
-                                return chain.filter(exchange);
+                                log.warn("Missing required claims in JWT token for path: {}", path);
+                                return exchange;
                             }
                             
                             ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
@@ -55,14 +58,24 @@ public class JwtFilter extends AbstractGatewayFilterFactory<JwtFilter.Config> {
                                     .request(mutatedRequest)
                                     .build();
                             
-                            log.debug("Added user headers: X-User-Id={}, X-User-Username={}", userId, username);
-                            return chain.filter(mutatedExchange);
+                            log.debug("Added user headers: X-User-Id={}, X-User-Username={} for path: {}", 
+                                    userId, username, path);
+                            return mutatedExchange;
                         } catch (Exception e) {
-                            log.error("Error processing JWT token: {}", e.getMessage());
-                            return chain.filter(exchange);
+                            log.error("Error processing JWT token for path {}: {}", path, e.getMessage(), e);
+                            return exchange;
                         }
                     })
-                    .switchIfEmpty(chain.filter(exchange));
+                    .switchIfEmpty(
+                        Mono.defer(() -> {
+                            // If no Principal, log warning but continue
+                            // This might happen if request is rejected by Spring Security
+                            log.warn("No Principal found for authenticated path: {}. " +
+                                    "This might indicate a security configuration issue.", path);
+                            return Mono.just(exchange);
+                        })
+                    )
+                    .flatMap(chain::filter);
         };
     }
 

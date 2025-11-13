@@ -64,12 +64,11 @@ const InventoryAlerts = () => {
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState('all');
 
-    // Load all alerts
     const loadAlerts = async () => {
         setLoading(true);
         try {
             const response = await apiService.inventory.getAlerts();
-            setAlerts(response.data || []);
+            setAlerts(Array.isArray(response) ? response : []);
         } catch (error) {
             message.error('Lỗi khi tải cảnh báo');
             console.error('Error loading alerts:', error);
@@ -78,42 +77,37 @@ const InventoryAlerts = () => {
         }
     };
 
-    // Load low stock alerts
     const loadLowStockAlerts = async () => {
         try {
             const response = await apiService.inventory.getLowStockAlerts();
-            setLowStockAlerts(response.data || []);
+            setLowStockAlerts(Array.isArray(response) ? response : []);
         } catch (error) {
             console.error('Error loading low stock alerts:', error);
         }
     };
 
-    // Load expiry alerts
     const loadExpiryAlerts = async () => {
         try {
             const response = await apiService.inventory.getExpiryAlerts();
-            setExpiryAlerts(response.data || []);
+            setExpiryAlerts(Array.isArray(response) ? response : []);
         } catch (error) {
             console.error('Error loading expiry alerts:', error);
         }
     };
 
-    // Load critical alerts
     const loadCriticalAlerts = async () => {
         try {
             const response = await apiService.inventory.getCriticalAlerts();
-            setCriticalAlerts(response.data || []);
+            setCriticalAlerts(Array.isArray(response) ? response : []);
         } catch (error) {
             console.error('Error loading critical alerts:', error);
         }
     };
 
-    // Load low stock ingredients
     const loadLowStockIngredients = async () => {
         try {
             const response = await apiService.inventory.getLowStockIngredients();
-            // This will be used for the low stock tab
-            return response.data || [];
+            return response?.ingredients || [];
         } catch (error) {
             console.error('Error loading low stock ingredients:', error);
             return [];

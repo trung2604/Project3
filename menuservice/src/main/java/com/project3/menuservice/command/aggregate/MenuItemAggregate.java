@@ -37,6 +37,17 @@ public class MenuItemAggregate {
 
     @CommandHandler
     public MenuItemAggregate(CreateMenuItemCommand command) {
+        // Validation
+        if (command.getName() == null || command.getName().trim().isEmpty()) {
+            throw new IllegalArgumentException("Menu item name is required");
+        }
+        if (command.getPrice() == null || command.getPrice() <= 0) {
+            throw new IllegalArgumentException("Menu item price must be positive");
+        }
+        if (command.getPreparationTime() != null && command.getPreparationTime() < 0) {
+            throw new IllegalArgumentException("Preparation time cannot be negative");
+        }
+        
         MenuItemCreatedEvent event = new MenuItemCreatedEvent();
         BeanUtils.copyProperties(command, event);
         apply(event);
@@ -59,6 +70,17 @@ public class MenuItemAggregate {
 
     @CommandHandler
     public void handle(UpdateMenuItemCommand command) {
+        // Validation
+        if (command.getName() != null && command.getName().trim().isEmpty()) {
+            throw new IllegalArgumentException("Menu item name cannot be empty");
+        }
+        if (command.getPrice() != null && command.getPrice() <= 0) {
+            throw new IllegalArgumentException("Menu item price must be positive");
+        }
+        if (command.getPreparationTime() != null && command.getPreparationTime() < 0) {
+            throw new IllegalArgumentException("Preparation time cannot be negative");
+        }
+        
         MenuItemUpdatedEvent event = new MenuItemUpdatedEvent();
         BeanUtils.copyProperties(command, event);
         apply(event);

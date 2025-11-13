@@ -1,7 +1,10 @@
 package com.project3.menuservice.controller;
 
+import com.project3.commonservice.dto.ApiResponseDTO;
 import com.project3.menuservice.service.CloudinaryService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -9,22 +12,21 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/cloudinary")
+@Slf4j
 public class CloudinaryController {
 
     @Autowired
     private CloudinaryService cloudinaryService;
 
-    /**
-     * Get Cloudinary signature for frontend upload
-     */
     @GetMapping("/signature")
-    public ResponseEntity<Map<String, String>> getSignature() {
+    public ResponseEntity<ApiResponseDTO<Map<String, String>>> getSignature() {
         try {
             Map<String, String> signature = cloudinaryService.generateSignature();
-            return ResponseEntity.ok(signature);
+            return ResponseEntity.ok(ApiResponseDTO.success(signature, "Cloudinary signature generated successfully"));
         } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.internalServerError().build();
+            log.error("Failed to generate Cloudinary signature: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponseDTO.error("Failed to generate Cloudinary signature: " + e.getMessage(), 500));
         }
     }
 }

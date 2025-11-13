@@ -15,7 +15,6 @@ const MenuCategories = () => {
     const { role, loading: authLoading } = useAuth();
     const navigate = useNavigate();
 
-    // Check permission
     if (authLoading) {
         return <Loading tip="Đang kiểm tra quyền truy cập..." />;
     }
@@ -42,7 +41,7 @@ const MenuCategories = () => {
         setLoading(true);
         try {
             const res = await apiService.menu.getCategories();
-            setCategories(res.data || []);
+            setCategories(Array.isArray(res) ? res : []);
         } catch (e) {
             message.error('Lỗi tải danh mục');
         } finally {

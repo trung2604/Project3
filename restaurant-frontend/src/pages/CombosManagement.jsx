@@ -58,19 +58,19 @@ const CombosManagement = () => {
         search: ''
     });
     const [modalVisible, setModalVisible] = useState(false);
-    const [modalType, setModalType] = useState('create'); // create, edit, view
+    const [modalType, setModalType] = useState('create');
     const [selectedCombo, setSelectedCombo] = useState(null);
     const [form] = Form.useForm();
 
-    // Load combos data
     const loadCombos = async () => {
         setLoading(true);
         try {
             const response = await apiService.menu.getCombos();
-            setCombos(response.data || []);
+            const combos = Array.isArray(response) ? response : [];
+            setCombos(combos);
             setPagination(prev => ({
                 ...prev,
-                total: response.data?.length || 0
+                total: combos.length
             }));
         } catch (error) {
             message.error('Lỗi khi tải dữ liệu combo');
@@ -80,16 +80,13 @@ const CombosManagement = () => {
         }
     };
 
-    // Load menu items for combo selection
     const loadMenuItems = async () => {
         try {
             const response = await apiService.menu.getMenuItems();
-            // Handle both direct array response and paginated response
-            const data = response.data;
-            if (Array.isArray(data)) {
-                setMenuItems(data);
-            } else if (data && Array.isArray(data.items)) {
-                setMenuItems(data.items);
+            if (response && Array.isArray(response.items)) {
+                setMenuItems(response.items);
+            } else if (Array.isArray(response)) {
+                setMenuItems(response);
             } else {
                 setMenuItems([]);
             }
@@ -122,7 +119,7 @@ const CombosManagement = () => {
         if (type === 'edit' && combo) {
             form.setFieldsValue({
                 ...combo,
-                menuItemIds: combo.menuItemIds || [] // Backend expects menuItemIds
+                menuItemIds: combo.menuItemIds || []
             });
         } else {
             form.resetFields();

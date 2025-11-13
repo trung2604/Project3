@@ -1,24 +1,14 @@
-/**
- * Centralized API Service
- * TẤT CẢ API calls của frontend đều được định nghĩa trong file này
- * Pages/components chỉ cần import và sử dụng functions từ đây
- */
-
 import apiClient from './api';
 import { API_ENDPOINTS, API_BASE_URL } from '../constants.js';
 import axios from 'axios';
-
-// ============================================
-// USER API
-// ============================================
+import notificationAPI from './notificationService';
+import orderAPI from './orderService';
 
 const USERS_BASE = '/api/users';
 
 const userAPI = {
-    // Authentication
     async login({ username, password }) {
-        const res = await apiClient.post(`${USERS_BASE}/login`, { username, password });
-        const data = res.data?.data || res.data;
+        const data = await apiClient.post(`${USERS_BASE}/login`, { username, password });
         if (data?.accessToken) {
             localStorage.setItem('accessToken', data.accessToken);
             localStorage.setItem('refreshToken', data.refreshToken || '');
@@ -28,16 +18,13 @@ const userAPI = {
     },
 
     async register(payload) {
-        const res = await apiClient.post(`${USERS_BASE}/register`, payload);
-        return res.data?.data || res.data;
+        return await apiClient.post(`${USERS_BASE}/register`, payload);
     },
 
     async exchangeToken(code, redirectUri) {
-        const res = await apiClient.post(`${USERS_BASE}/oauth/token-exchange`, { code, redirectUri });
-        return res.data?.data || res.data;
+        return await apiClient.post(`${USERS_BASE}/oauth/token-exchange`, { code, redirectUri });
     },
 
-    // User Profile
     getStoredUser() {
         const raw = localStorage.getItem('user');
         try {
@@ -48,38 +35,31 @@ const userAPI = {
     },
 
     async getById(userId) {
-        const res = await apiClient.get(`${USERS_BASE}/${userId}`);
-        return res.data?.data || res.data;
+        return await apiClient.get(`${USERS_BASE}/${userId}`);
     },
 
     async getMe() {
-        const res = await apiClient.get(`${USERS_BASE}/me`);
-        return res.data?.data || res.data;
+        return await apiClient.get(`${USERS_BASE}/me`);
     },
 
     async updateMe(payload) {
-        const res = await apiClient.put(`${USERS_BASE}/me`, payload);
-        const data = res.data?.data || res.data;
+        const data = await apiClient.put(`${USERS_BASE}/me`, payload);
         if (data) localStorage.setItem('user', JSON.stringify(data));
         return data;
     },
 
     async changeMyPassword({ currentPassword, newPassword }) {
-        const res = await apiClient.patch(`${USERS_BASE}/me/password`, { currentPassword, newPassword });
-        return res.data?.data || res.data;
+        return await apiClient.patch(`${USERS_BASE}/me/password`, { currentPassword, newPassword });
     },
 
     async updateAvatar(userId, { avatarUrl, avatarPublicId }) {
-        const res = await apiClient.patch(`${USERS_BASE}/${userId}/avatar`, { avatarUrl, avatarPublicId });
-        const data = res.data?.data || res.data;
+        const data = await apiClient.patch(`${USERS_BASE}/${userId}/avatar`, { avatarUrl, avatarPublicId });
         if (data) localStorage.setItem('user', JSON.stringify(data));
         return data;
     },
 
-    // Admin User Management
     async createUser(payload) {
-        const res = await apiClient.post(`${USERS_BASE}`, payload);
-        return res.data?.data || res.data;
+        return await apiClient.post(`${USERS_BASE}`, payload);
     },
 
     async getAllUsers(params = {}) {
@@ -92,27 +72,19 @@ const userAPI = {
 
         const queryString = queryParams.toString();
         const url = queryString ? `${USERS_BASE}?${queryString}` : USERS_BASE;
-        const res = await apiClient.get(url);
-        return res.data?.data || res.data;
+        return await apiClient.get(url);
     },
 
     async deleteUser(userId) {
-        const res = await apiClient.delete(`${USERS_BASE}/${userId}`);
-        return res.data?.data || res.data;
+        return await apiClient.delete(`${USERS_BASE}/${userId}`);
     },
 
     async toggleUserStatus(userId, status) {
-        const res = await apiClient.patch(`${USERS_BASE}/${userId}/status?status=${status}`);
-        return res.data?.data || res.data;
+        return await apiClient.patch(`${USERS_BASE}/${userId}/status?status=${status}`);
     }
 };
 
-// ============================================
-// MENU API
-// ============================================
-
 const menuAPI = {
-    // Menu Items
     async getMenuItems(params = {}) {
         // Sanitize query params
         const cleanedEntries = Object.entries(params)
@@ -142,226 +114,171 @@ const menuAPI = {
             Object.entries(normalized).filter(([_, v]) => v !== undefined)
         );
 
-        const res = await apiClient.get(API_ENDPOINTS.MENU.ITEMS, { params: queryParams });
-        return res.data?.data || res.data;
+        return await apiClient.get(API_ENDPOINTS.MENU.ITEMS, { params: queryParams });
     },
 
     async getMenuItemById(id) {
-        const res = await apiClient.get(`${API_ENDPOINTS.MENU.ITEMS}/${id}`);
-        return res.data?.data || res.data;
+        return await apiClient.get(`${API_ENDPOINTS.MENU.ITEMS}/${id}`);
     },
 
     async createMenuItem(data) {
-        const res = await apiClient.post(API_ENDPOINTS.MENU.ITEMS, data);
-        return res.data?.data || res.data;
+        return await apiClient.post(API_ENDPOINTS.MENU.ITEMS, data);
     },
 
     async updateMenuItem(id, data) {
-        const res = await apiClient.put(`${API_ENDPOINTS.MENU.ITEMS}/${id}`, data);
-        return res.data?.data || res.data;
+        return await apiClient.put(`${API_ENDPOINTS.MENU.ITEMS}/${id}`, data);
     },
 
     async deleteMenuItem(id) {
-        const res = await apiClient.delete(`${API_ENDPOINTS.MENU.ITEMS}/${id}`);
-        return res.data?.data || res.data;
+        return await apiClient.delete(`${API_ENDPOINTS.MENU.ITEMS}/${id}`);
     },
 
     async toggleMenuItemActive(id, active) {
-        const res = await apiClient.patch(`${API_ENDPOINTS.MENU.ITEMS}/${id}/active`, null, {
+        return await apiClient.patch(`${API_ENDPOINTS.MENU.ITEMS}/${id}/active`, null, {
             params: { active }
         });
-        return res.data?.data || res.data;
     },
 
     async updateMenuItemIngredients(id, ingredients) {
-        const res = await apiClient.patch(`${API_ENDPOINTS.MENU.ITEMS}/${id}/ingredients`, ingredients);
-        return res.data?.data || res.data;
+        return await apiClient.patch(`${API_ENDPOINTS.MENU.ITEMS}/${id}/ingredients`, ingredients);
     },
 
     async updateMenuItemPrice(id, price) {
-        const res = await apiClient.patch(`${API_ENDPOINTS.MENU.ITEMS}/${id}/price`, { price });
-        return res.data?.data || res.data;
+        return await apiClient.patch(`${API_ENDPOINTS.MENU.ITEMS}/${id}/price`, { price });
     },
 
-    // Categories
     async getCategories() {
-        const res = await apiClient.get(API_ENDPOINTS.MENU.CATEGORIES);
-        return res.data?.data || res.data;
+        return await apiClient.get(API_ENDPOINTS.MENU.CATEGORIES);
     },
 
     async getCategoryById(id) {
-        const res = await apiClient.get(`${API_ENDPOINTS.MENU.CATEGORIES}/${id}`);
-        return res.data?.data || res.data;
+        return await apiClient.get(`${API_ENDPOINTS.MENU.CATEGORIES}/${id}`);
     },
 
     async getCategoriesByType(type) {
-        const res = await apiClient.get(`${API_ENDPOINTS.MENU.CATEGORIES}/type/${type}`);
-        return res.data?.data || res.data;
+        return await apiClient.get(`${API_ENDPOINTS.MENU.CATEGORIES}/type/${type}`);
     },
 
     async createCategory(data) {
-        const res = await apiClient.post(API_ENDPOINTS.MENU.CATEGORIES, data);
-        return res.data?.data || res.data;
+        return await apiClient.post(API_ENDPOINTS.MENU.CATEGORIES, data);
     },
 
     async updateCategory(id, data) {
-        const res = await apiClient.put(`${API_ENDPOINTS.MENU.CATEGORIES}/${id}`, data);
-        return res.data?.data || res.data;
+        return await apiClient.put(`${API_ENDPOINTS.MENU.CATEGORIES}/${id}`, data);
     },
 
     async deleteCategory(id) {
-        const res = await apiClient.delete(`${API_ENDPOINTS.MENU.CATEGORIES}/${id}`);
-        return res.data?.data || res.data;
+        return await apiClient.delete(`${API_ENDPOINTS.MENU.CATEGORIES}/${id}`);
     },
 
-    // Combos
     async getCombos(params = {}) {
-        const res = await apiClient.get(API_ENDPOINTS.MENU.COMBOS, { params });
-        return res.data?.data || res.data;
+        return await apiClient.get(API_ENDPOINTS.MENU.COMBOS, { params });
     },
 
     async getComboById(id) {
-        const res = await apiClient.get(`${API_ENDPOINTS.MENU.COMBOS}/${id}`);
-        return res.data?.data || res.data;
+        return await apiClient.get(`${API_ENDPOINTS.MENU.COMBOS}/${id}`);
     },
 
     async createCombo(data) {
-        const res = await apiClient.post(API_ENDPOINTS.MENU.COMBOS, data);
-        return res.data?.data || res.data;
+        return await apiClient.post(API_ENDPOINTS.MENU.COMBOS, data);
     },
 
     async updateCombo(id, data) {
-        const res = await apiClient.put(`${API_ENDPOINTS.MENU.COMBOS}/${id}`, data);
-        return res.data?.data || res.data;
+        return await apiClient.put(`${API_ENDPOINTS.MENU.COMBOS}/${id}`, data);
     },
 
     async deleteCombo(id) {
-        const res = await apiClient.delete(`${API_ENDPOINTS.MENU.COMBOS}/${id}`);
-        return res.data?.data || res.data;
+        return await apiClient.delete(`${API_ENDPOINTS.MENU.COMBOS}/${id}`);
     },
 
     async toggleComboActive(id, active) {
-        const res = await apiClient.patch(`${API_ENDPOINTS.MENU.COMBOS}/${id}/active`, null, {
+        return await apiClient.patch(`${API_ENDPOINTS.MENU.COMBOS}/${id}/active`, null, {
             params: { active }
         });
-        return res.data?.data || res.data;
     }
 };
 
-// ============================================
-// INVENTORY API
-// ============================================
-
 const inventoryAPI = {
-    // Ingredients
     async getIngredients(params = {}) {
-        const res = await apiClient.get(API_ENDPOINTS.INVENTORY.INGREDIENTS, { params });
-        return res.data?.data || res.data;
+        return await apiClient.get(API_ENDPOINTS.INVENTORY.INGREDIENTS, { params });
     },
 
     async getIngredientById(id) {
-        const res = await apiClient.get(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}`);
-        return res.data?.data || res.data;
+        return await apiClient.get(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}`);
     },
 
     async createIngredient(data) {
-        const res = await apiClient.post(API_ENDPOINTS.INVENTORY.INGREDIENTS, data);
-        return res.data?.data || res.data;
+        return await apiClient.post(API_ENDPOINTS.INVENTORY.INGREDIENTS, data);
     },
 
     async updateIngredient(id, data) {
-        const res = await apiClient.put(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}`, data);
-        return res.data?.data || res.data;
+        return await apiClient.put(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}`, data);
     },
 
     async deleteIngredient(id) {
-        const res = await apiClient.delete(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}`);
-        return res.data?.data || res.data;
+        return await apiClient.delete(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}`);
     },
 
     async toggleIngredientActive(id) {
-        const res = await apiClient.put(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}/toggle`);
-        return res.data?.data || res.data;
+        return await apiClient.put(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}/toggle`);
     },
 
-    // Stock Operations
     async stockIn(id, data) {
-        const res = await apiClient.post(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}/stock-in`, data);
-        return res.data?.data || res.data;
+        return await apiClient.post(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}/stock-in`, data);
     },
 
     async stockOut(id, data) {
-        const res = await apiClient.post(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}/stock-out`, data);
-        return res.data?.data || res.data;
+        return await apiClient.post(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}/stock-out`, data);
     },
 
     async adjustStock(id, data) {
-        const res = await apiClient.post(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}/adjust`, data);
-        return res.data?.data || res.data;
+        return await apiClient.post(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}/adjust`, data);
     },
 
     async stockTake(id, data) {
-        const res = await apiClient.post(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}/stock-take`, data);
-        return res.data?.data || res.data;
+        return await apiClient.post(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/${id}/stock-take`, data);
     },
 
-    // Transactions
     async getTransactions(params = {}) {
-        const res = await apiClient.get(API_ENDPOINTS.INVENTORY.TRANSACTIONS, { params });
-        return res.data?.data || res.data;
+        return await apiClient.get(API_ENDPOINTS.INVENTORY.TRANSACTIONS, { params });
     },
 
     async getTransactionsByIngredient(id, params = {}) {
-        const res = await apiClient.get(`${API_ENDPOINTS.INVENTORY.TRANSACTIONS}/ingredient/${id}`, { params });
-        return res.data?.data || res.data;
+        return await apiClient.get(`${API_ENDPOINTS.INVENTORY.TRANSACTIONS}/ingredient/${id}`, { params });
     },
 
     async getTransactionsByType(type, params = {}) {
-        const res = await apiClient.get(`${API_ENDPOINTS.INVENTORY.TRANSACTIONS}/type/${type}`, { params });
-        return res.data?.data || res.data;
+        return await apiClient.get(`${API_ENDPOINTS.INVENTORY.TRANSACTIONS}/type/${type}`, { params });
     },
 
-    // Alerts
     async getAlerts(params = {}) {
-        const res = await apiClient.get(API_ENDPOINTS.INVENTORY.ALERTS, { params });
-        return res.data?.data || res.data;
+        return await apiClient.get(API_ENDPOINTS.INVENTORY.ALERTS, { params });
     },
 
     async getActiveAlerts() {
-        const res = await apiClient.get(`${API_ENDPOINTS.INVENTORY.ALERTS}/active`);
-        return res.data?.data || res.data;
+        return await apiClient.get(`${API_ENDPOINTS.INVENTORY.ALERTS}/active`);
     },
 
     async getLowStockAlerts() {
-        const res = await apiClient.get(`${API_ENDPOINTS.INVENTORY.ALERTS}/low-stock`);
-        return res.data?.data || res.data;
+        return await apiClient.get(`${API_ENDPOINTS.INVENTORY.ALERTS}/low-stock`);
     },
 
     async getExpiryAlerts() {
-        const res = await apiClient.get(`${API_ENDPOINTS.INVENTORY.ALERTS}/expiry`);
-        return res.data?.data || res.data;
+        return await apiClient.get(`${API_ENDPOINTS.INVENTORY.ALERTS}/expiry`);
     },
 
     async getCriticalAlerts() {
-        const res = await apiClient.get(`${API_ENDPOINTS.INVENTORY.ALERTS}/critical`);
-        return res.data?.data || res.data;
+        return await apiClient.get(`${API_ENDPOINTS.INVENTORY.ALERTS}/critical`);
     },
 
-    // Advanced Queries
     async getLowStockIngredients() {
-        const res = await apiClient.get(API_ENDPOINTS.INVENTORY.LOW_STOCK);
-        return res.data?.data || res.data;
+        return await apiClient.get(API_ENDPOINTS.INVENTORY.LOW_STOCK);
     },
 
     async getIngredientsByCategory(category) {
-        const res = await apiClient.get(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/category/${category}`);
-        return res.data?.data || res.data;
+        return await apiClient.get(`${API_ENDPOINTS.INVENTORY.INGREDIENTS}/category/${category}`);
     }
 };
-
-// ============================================
-// DASHBOARD API
-// ============================================
 
 const dashboardAPI = {
     async getStats() {
@@ -373,9 +290,9 @@ const dashboardAPI = {
             ]);
 
             return {
-                totalIngredients: ingredientsResponse.status === 'fulfilled' ? (ingredientsResponse.value.data?.data?.totalElements || 0) : 0,
-                totalMenuItems: menuResponse.status === 'fulfilled' ? (menuResponse.value.data?.data?.totalElements || 0) : 0,
-                alertCount: alertsResponse.status === 'fulfilled' ? (alertsResponse.value.data?.data?.length || 0) : 0
+                totalIngredients: ingredientsResponse.status === 'fulfilled' ? (ingredientsResponse.value?.totalElements || 0) : 0,
+                totalMenuItems: menuResponse.status === 'fulfilled' ? (menuResponse.value?.totalElements || 0) : 0,
+                alertCount: alertsResponse.status === 'fulfilled' ? (Array.isArray(alertsResponse.value) ? alertsResponse.value.length : 0) : 0
             };
         } catch (error) {
             console.error('Error getting dashboard stats:', error);
@@ -389,7 +306,6 @@ const dashboardAPI = {
 
     async getRevenue(period = 'month') {
         try {
-            // TODO: Implement real revenue API when available
             return {
                 monthlyRevenue: 0,
                 dailyRevenue: 0,
@@ -408,7 +324,7 @@ const dashboardAPI = {
     async getLowStockIngredients() {
         try {
             const res = await apiClient.get(API_ENDPOINTS.INVENTORY.LOW_STOCK);
-            return res.data?.data || res.data || [];
+            return Array.isArray(res) ? res : [];
         } catch (error) {
             console.error('Error getting low stock ingredients:', error);
             return [];
@@ -418,7 +334,7 @@ const dashboardAPI = {
     async getActiveAlerts() {
         try {
             const res = await apiClient.get(`${API_ENDPOINTS.INVENTORY.ALERTS}/active`);
-            return res.data?.data || res.data || [];
+            return Array.isArray(res) ? res : [];
         } catch (error) {
             console.error('Error getting active alerts:', error);
             return [];
@@ -426,18 +342,12 @@ const dashboardAPI = {
     }
 };
 
-// ============================================
-// CLOUDINARY API
-// ============================================
-
 const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/dswb2h4ny/image/upload';
 
 const cloudinaryAPI = {
     async getSignature() {
         try {
-            const url = `${API_BASE_URL}${API_ENDPOINTS.CLOUDINARY.SIGNATURE}`;
-            const response = await axios.get(url);
-            return response.data?.data || response.data;
+            return await apiClient.get(API_ENDPOINTS.CLOUDINARY.SIGNATURE);
         } catch (error) {
             console.error('Error getting signature:', error);
             throw error;
@@ -446,15 +356,12 @@ const cloudinaryAPI = {
 
     async uploadImage(file, folder = 'restaurant-menu') {
         try {
-            // Get signature from backend
             const signature = await this.getSignature();
 
-            // Validate signature data
             if (!signature.apiKey || !signature.timestamp || !signature.signature) {
                 throw new Error('Invalid signature data from backend');
             }
 
-            // Create form data with signature
             const formData = new FormData();
             formData.append('file', file);
             formData.append('api_key', signature.apiKey);
@@ -462,7 +369,6 @@ const cloudinaryAPI = {
             formData.append('signature', signature.signature);
             formData.append('folder', folder);
 
-            // Upload to Cloudinary
             const response = await axios.post(CLOUDINARY_URL, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
@@ -486,20 +392,16 @@ const cloudinaryAPI = {
     }
 };
 
-// ============================================
-// EXPORT
-// ============================================
+export { userAPI, menuAPI, inventoryAPI, dashboardAPI, cloudinaryAPI, notificationAPI };
 
-// Named exports for individual APIs
-export { userAPI, menuAPI, inventoryAPI, dashboardAPI, cloudinaryAPI };
-
-// Default export with all APIs grouped
 const apiService = {
     user: userAPI,
     menu: menuAPI,
     inventory: inventoryAPI,
     dashboard: dashboardAPI,
-    cloudinary: cloudinaryAPI
+    cloudinary: cloudinaryAPI,
+    notification: notificationAPI,
+    order: orderAPI
 };
 
 export default apiService;

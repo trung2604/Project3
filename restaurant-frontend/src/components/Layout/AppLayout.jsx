@@ -22,6 +22,7 @@ import { getMenuItemsByRole } from '../../utils/auth';
 import { useAuth } from '../../context/AuthContext';
 import { buildKeycloakLogoutUrl } from '../../utils/keycloak';
 import { IDP } from '../../constants';
+import NotificationDropdown from '../Common/NotificationDropdown';
 
 const { Header, Content } = Layout;
 
@@ -61,6 +62,25 @@ const AppLayout = ({ children }) => {
     };
 
     const currentSection = getCurrentSection();
+
+    // Get page title based on current section
+    const getPageTitle = () => {
+        const pageTitleMap = {
+            'overview': 'Dashboard Tổng Quan',
+            'menu': 'Quản lý Thực đơn',
+            'menu-categories': 'Quản lý Danh mục',
+            'menu-combos': 'Quản lý Combo',
+            'orders': 'Quản lý Đơn hàng',
+            'inventory': 'Quản lý Kho',
+            'inventory-alerts': 'Cảnh báo Kho',
+            'inventory-transactions': 'Lịch sử Giao dịch',
+            'staff': 'Quản lý Nhân viên',
+            'settings': 'Cài đặt Hệ thống'
+        };
+        return pageTitleMap[currentSection] || 'Dashboard';
+    };
+
+    const pageTitle = getPageTitle();
 
     // Get menu items based on user role
     const menuItems = getMenuItemsByRole(role || 'CUSTOMER');
@@ -154,14 +174,15 @@ const AppLayout = ({ children }) => {
                         className="header-logo"
                         style={{ width: '80px', height: '80px', marginRight: '20px' }}
                     />
-                    <h1 className="header-title">Trung's Restaurant Management</h1>
+                    <div className="header-title-section">
+                        <h1 className="header-title">Trung's Restaurant Management</h1>
+                        <div className="header-page-title">{pageTitle}</div>
+                    </div>
                 </div>
 
                 <div className="header-right">
                     <div className="user-info-section">
-                        <Badge count={3} size="small">
-                            <BellOutlined className="notification-icon" />
-                        </Badge>
+                        <NotificationDropdown />
                         <div className="user-info-text">
                             <div className="user-name">{userName}</div>
                             <div className="user-role">{getRoleLabel(role)}</div>
@@ -187,11 +208,17 @@ const AppLayout = ({ children }) => {
                 {sidebarIcons.map((item, index) => (
                     <div
                         key={index}
-                        className={`sidebar-icon ${item.active ? 'active' : ''}`}
+                        className={`sidebar-item ${item.active ? 'active' : ''}`}
                         onClick={() => handleIconClick(item.key)}
                         title={item.label}
                     >
-                        {item.icon}
+                        <div className="sidebar-icon-wrapper">
+                            {item.active && <div className="sidebar-indicator" />}
+                            <div className="sidebar-icon">
+                                {item.icon}
+                            </div>
+                        </div>
+                        <span className="sidebar-label">{item.label}</span>
                     </div>
                 ))}
             </div>

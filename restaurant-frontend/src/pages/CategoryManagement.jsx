@@ -51,19 +51,19 @@ const CategoryManagement = () => {
         search: ''
     });
     const [modalVisible, setModalVisible] = useState(false);
-    const [modalType, setModalType] = useState('create'); // create, edit
+    const [modalType, setModalType] = useState('create');
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [form] = Form.useForm();
 
-    // Load categories data
     const loadCategories = async () => {
         setLoading(true);
         try {
             const response = await apiService.menu.getCategories();
-            setCategories(response.data || []);
+            const categories = Array.isArray(response) ? response : [];
+            setCategories(categories);
             setPagination(prev => ({
                 ...prev,
-                total: response.data?.length || 0
+                total: categories.length
             }));
         } catch (error) {
             message.error('Lỗi khi tải dữ liệu danh mục');
@@ -77,7 +77,6 @@ const CategoryManagement = () => {
         loadCategories();
     }, []);
 
-    // Handle search and filters
     const handleSearch = (value) => {
         setFilters(prev => ({ ...prev, search: value }));
     };
@@ -86,7 +85,6 @@ const CategoryManagement = () => {
         setFilters(prev => ({ ...prev, [key]: value }));
     };
 
-    // Modal handlers
     const showModal = (type, category = null) => {
         setModalType(type);
         setSelectedCategory(category);
@@ -107,7 +105,7 @@ const CategoryManagement = () => {
                 await apiService.menu.createCategory(values);
                 message.success('Tạo danh mục thành công');
             } else if (modalType === 'edit') {
-                await apiService.menu.updateCategory(selectedCategory.id, values);
+                await apiService.menu.updateCategory(selectedCategory.categoryId || selectedCategory.id, values);
                 message.success('Cập nhật danh mục thành công');
             }
 
@@ -119,7 +117,6 @@ const CategoryManagement = () => {
         }
     };
 
-    // Delete category
     const handleDelete = async (id) => {
         try {
             await apiService.menu.deleteCategory(id);
@@ -130,19 +127,34 @@ const CategoryManagement = () => {
         }
     };
 
-    // Filter categories based on search and filters
-    const filteredCategories = categories.filter(category => {
-        const matchesSearch = !filters.search ||
-            category.name.toLowerCase().includes(filters.search.toLowerCase()) ||
-            category.description?.toLowerCase().includes(filters.search.toLowerCase());
+    const filteredCategories = React.useMemo(() => {
+        if (!categories || categories.length === 0) {
+            return [];
+        }
 
-        const matchesType = !filters.type || category.type === filters.type;
-        const matchesActive = filters.active === null || category.active === filters.active;
+        return categories.filter(category => {
+            if (!category || !category.categoryId) {
+                return false;
+            }
 
-        return matchesSearch && matchesType && matchesActive;
-    });
+            const matchesSearch = !filters.search ||
+                filters.search.trim() === '' ||
+                (category.name && category.name.toLowerCase().includes(filters.search.toLowerCase())) ||
+                (category.description && category.description.toLowerCase().includes(filters.search.toLowerCase()));
 
-    // Table columns
+            const matchesType = !filters.type ||
+                filters.type.trim() === '' ||
+                category.type === filters.type ||
+                category.type?.toLowerCase() === filters.type?.toLowerCase();
+
+            const matchesActive = filters.active === null ||
+                filters.active === undefined ||
+                category.active === filters.active;
+
+            return matchesSearch && matchesType && matchesActive;
+        });
+    }, [categories, filters]);
+
     const columns = [
         {
             title: 'Tên danh mục',
@@ -206,7 +218,7 @@ const CategoryManagement = () => {
                     </Button>
                     <Popconfirm
                         title="Bạn có chắc muốn xóa danh mục này?"
-                        onConfirm={() => handleDelete(record.id)}
+                        onConfirm={() => handleDelete(record.categoryId || record.id)}
                         okText="Xóa"
                         cancelText="Hủy"
                     >
@@ -331,7 +343,7 @@ const CategoryManagement = () => {
                 <Table
                     columns={columns}
                     dataSource={filteredCategories}
-                    rowKey={(record) => record.id || record.categoryId}
+                    rowKey="categoryId"
                     loading={loading}
                     pagination={{
                         ...pagination,
@@ -342,6 +354,9 @@ const CategoryManagement = () => {
                         pageSizeOptions: PAGINATION.PAGE_SIZE_OPTIONS,
                     }}
                     scroll={{ x: 800 }}
+                    locale={{
+                        emptyText: 'Không có danh mục nào'
+                    }}
                 />
             </Card>
 

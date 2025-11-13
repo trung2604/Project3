@@ -1,5 +1,6 @@
 package com.project3.menuservice.command.event;
 
+import com.project3.commonservice.service.KafkaService;
 import com.project3.menuservice.command.entity.MenuItem;
 import com.project3.menuservice.command.entity.MenuItemRepository;
 import org.axonframework.eventhandling.EventHandler;
@@ -13,6 +14,9 @@ public class AutoToggleEventHandler {
 
     @Autowired
     private MenuItemRepository menuItemRepository;
+    
+    @Autowired(required = false)
+    private KafkaService kafkaService;
 
     @EventHandler
     public void on(InventoryLowEvent event) {
@@ -45,6 +49,16 @@ public class AutoToggleEventHandler {
             item.setActive(false);
             menuItemRepository.save(item);
         });
+        
+        // Send to Kafka for Notification Service
+        if (kafkaService != null && !affectedItems.isEmpty()) {
+            try {
+                kafkaService.sendMessage("menu-inventory-out-of-stock", event);
+            } catch (Exception e) {
+                // Log error but don't fail the event handler
+                System.err.println("Failed to send InventoryOutOfStockEvent to Kafka: " + e.getMessage());
+            }
+        }
     }
 
     @EventHandler
@@ -64,6 +78,16 @@ public class AutoToggleEventHandler {
                 menuItemRepository.save(item);
             }
         });
+        
+        // Send to Kafka for Notification Service (optional, lower priority)
+        if (kafkaService != null) {
+            try {
+                kafkaService.sendMessage("menu-inventory-restocked", event);
+            } catch (Exception e) {
+                // Log error but don't fail the event handler
+                System.err.println("Failed to send InventoryRestockedEvent to Kafka: " + e.getMessage());
+            }
+        }
     }
 
     private boolean checkAllIngredientsAvailable(MenuItem item) {

@@ -24,12 +24,19 @@ public class IngredientProjection {
     
     @QueryHandler
     public PagedIngredientResponse getAll(GetAllIngredientsQuery query) {
-        Pageable pageable = PageRequest.of(query.getPage(), query.getSize());
+        int page = query.getPage() >= 0 ? query.getPage() : 0;
+        int size = query.getSize() > 0 ? query.getSize() : 20;
+
+        // For native query, don't use Sort in Pageable to avoid column name issues
+        // Sorting will be handled by default ORDER BY in query
+        Pageable pageable = PageRequest.of(page, size);
+        
         Page<Ingredient> ingredientPage = ingredientRepository.findByFilters(
             query.getCategory(),
             query.getActive(),
             query.getMinStock(),
             query.getMaxStock(),
+            query.getSearch(),
             pageable
         );
         

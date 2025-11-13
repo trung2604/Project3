@@ -101,13 +101,12 @@ const MenuManagement = () => {
             };
 
             const response = await apiService.menu.getMenuItems(params);
-            // apiService already unwraps the response
-            const data = response?.data || response;
-            setMenuItems(data?.items || []);
+            // Response interceptor đã extract data, response là PagedMenuItemResponse trực tiếp
+            setMenuItems(response?.items || []);
             setPagination(prev => ({
                 ...prev,
                 current: page,
-                total: data?.totalElements || 0
+                total: response?.totalElements || 0
             }));
         } catch (error) {
             message.error('Lỗi khi tải dữ liệu món ăn');
@@ -121,8 +120,8 @@ const MenuManagement = () => {
     const loadCategories = async () => {
         try {
             const response = await apiService.menu.getCategories();
-            // apiService already unwraps the response
-            setCategories(response?.data || response || []);
+            // Response interceptor đã extract data, response là list trực tiếp
+            setCategories(Array.isArray(response) ? response : []);
         } catch (error) {
             console.error('Error loading categories:', error);
         }
@@ -132,17 +131,19 @@ const MenuManagement = () => {
     const loadIngredients = async () => {
         try {
             const response = await apiService.inventory.getIngredients({ size: 1000 });
-            // apiService already unwraps the response
-            const data = response?.data || response;
-            setIngredients(data?.ingredients || []);
+            // Response interceptor đã extract data, response là PagedIngredientResponse trực tiếp
+            setIngredients(response?.ingredients || []);
         } catch (error) {
             console.error('Error loading ingredients:', error);
         }
     };
 
     useEffect(() => {
-        loadMenuItems();
         loadCategories();
+    }, []);
+
+    useEffect(() => {
+        loadMenuItems();
         loadIngredients();
     }, [filters]);
 
@@ -165,24 +166,51 @@ const MenuManagement = () => {
         setModalType(type);
         setSelectedMenuItem(menuItem);
         setModalVisible(true);
-        setImagePreview(null);
 
         if (type === 'edit' && menuItem) {
-            form.setFieldsValue({
-                ...menuItem,
-                categoryId: menuItem.categoryId?.toString(),
-                imageUrl: menuItem.imageUrl || undefined,
-                imagePublicId: menuItem.imagePublicId || undefined
-            });
-            if (menuItem.imageUrl) {
-                setImagePreview(menuItem.imageUrl);
-            }
+            // Reset form first to clear any initialValues
+            form.resetFields();
+
+            // Prepare form values - ensure all fields are explicitly set with proper defaults
+            const formValues = {
+                name: menuItem.name || '',
+                description: menuItem.description || '',
+                categoryId: menuItem.categoryId ? String(menuItem.categoryId) : undefined,
+                price: menuItem.price !== null && menuItem.price !== undefined ? Number(menuItem.price) : 0,
+                preparationTime: menuItem.preparationTime !== null && menuItem.preparationTime !== undefined ? Number(menuItem.preparationTime) : null,
+                recipe: menuItem.recipe || '',
+                active: menuItem.active !== undefined ? Boolean(menuItem.active) : true,
+                imageUrl: menuItem.imageUrl || '',
+                imagePublicId: menuItem.imagePublicId || ''
+            };
+
+            // Use setTimeout to ensure modal and form are fully rendered
+            // Wait for categories to be available and form to be mounted
+            setTimeout(() => {
+                // Set all form values
+                form.setFieldsValue(formValues);
+
+                // Force update to ensure all fields are rendered
+                form.validateFields().catch(() => {
+                    // Ignore validation errors, we just want to trigger a re-render
+                });
+
+                // Set image preview
+                if (menuItem.imageUrl) {
+                    setImagePreview(menuItem.imageUrl);
+                } else {
+                    setImagePreview(null);
+                }
+            }, 150);
         } else if (type === 'ingredients' && menuItem) {
+            form.resetFields();
             form.setFieldsValue({
                 ingredients: menuItem.ingredients || []
             });
+            setImagePreview(null);
         } else {
             form.resetFields();
+            setImagePreview(null);
         }
     };
 
@@ -202,6 +230,11 @@ const MenuManagement = () => {
                 await apiService.menu.createMenuItem(payload);
                 message.success('Tạo món ăn thành công');
             } else if (modalType === 'edit') {
+                // Ensure imageUrl is preserved if not changed
+                if (!payload.imageUrl && selectedMenuItem?.imageUrl) {
+                    payload.imageUrl = selectedMenuItem.imageUrl;
+                    payload.imagePublicId = selectedMenuItem.imagePublicId;
+                }
                 await apiService.menu.updateMenuItem(selectedMenuItem.menuItemId, payload);
                 message.success('Cập nhật món ăn thành công');
             } else if (modalType === 'ingredients') {
@@ -210,6 +243,8 @@ const MenuManagement = () => {
             }
 
             setModalVisible(false);
+            form.resetFields();
+            setImagePreview(null);
             loadMenuItems(pagination.current, pagination.pageSize);
         } catch (error) {
             message.error('Có lỗi xảy ra khi thực hiện thao tác');
@@ -545,7 +580,11 @@ const MenuManagement = () => {
                 </div>
                 {uploading && <div style={{ marginTop: 8, color: '#1890ff' }}>Đang upload...</div>}
                 {/* Hidden fields for uploaded image metadata */}
-                <Form.Item name="imageUrl" style={{ display: 'none' }} rules={[{ required: true, message: 'Vui lòng upload hình ảnh' }]}>
+                <Form.Item
+                    name="imageUrl"
+                    style={{ display: 'none' }}
+                    rules={modalType === 'create' ? [{ required: true, message: 'Vui lòng upload hình ảnh' }] : []}
+                >
                     <Input />
                 </Form.Item>
                 <Form.Item name="imagePublicId" style={{ display: 'none' }}>
@@ -572,7 +611,6 @@ const MenuManagement = () => {
                     name="active"
                     label="Trạng thái"
                     valuePropName="checked"
-                    initialValue={true}
                 >
                     <Switch checkedChildren="Bán" unCheckedChildren="Tạm dừng" />
                 </Form.Item>

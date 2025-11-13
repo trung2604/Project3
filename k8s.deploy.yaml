@@ -1,0 +1,1318 @@
+﻿# PostgreSQL Database
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+data:
+  init.sql: |
+    CREATE DATABASE "UserService";
+    CREATE DATABASE "MenuService";
+    CREATE DATABASE "InventoryService";
+    CREATE DATABASE "OrderService";
+    CREATE DATABASE "keycloak";
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  labels:
+    app: postgres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # For minikube, use "standard" storage class
+  # For other clusters, check available storage classes with: kubectl get storageclass
+  storageClassName: standard
+  # If no storage class is available, remove storageClassName to use default
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_USER
+          value: "postgres"
+        - name: POSTGRES_PASSWORD
+          value: "postgre"
+        - name: POSTGRES_DB
+          value: "project3"
+        volumeMounts:
+        - name: postgres-init
+          mountPath: /docker-entrypoint-initdb.d
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        startupProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 30
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: postgres-init
+        configMap:
+          name: postgres-init
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+
+# Axon Server
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: axonserver
+  labels:
+    app: axonserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: axonserver
+  template:
+    metadata:
+      labels:
+        app: axonserver
+    spec:
+      containers:
+      - name: axonserver
+        image: axoniq/axonserver:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8024
+        - containerPort: 8124
+        env:
+        - name: AXONIQ_AXONSERVER_STANDALONE
+          value: "TRUE"
+        resources:
+          requests:
+            memory: "384Mi"
+            cpu: "100m"
+          limits:
+            memory: "768Mi"
+            cpu: "400m"
+        startupProbe:
+          tcpSocket:
+            port: 8124
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 40
+        livenessProbe:
+          tcpSocket:
+            port: 8124
+          initialDelaySeconds: 120
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 8124
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: axonserver
+  labels:
+    app: axonserver
+spec:
+  selector:
+    app: axonserver
+  ports:
+    - protocol: TCP
+      port: 8024
+      targetPort: 8024
+      name: http
+    - protocol: TCP
+      port: 8124
+      targetPort: 8124
+      name: grpc
+
+# Zookeeper for Kafka
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zookeeper
+  labels:
+    app: zookeeper
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zookeeper
+  template:
+    metadata:
+      labels:
+        app: zookeeper
+    spec:
+      containers:
+      - name: zookeeper
+        image: confluentinc/cp-zookeeper:7.8.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 2181
+        env:
+        - name: ZOOKEEPER_CLIENT_PORT
+          value: "2181"
+        - name: ZOOKEEPER_TICK_TIME
+          value: "2000"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        startupProbe:
+          tcpSocket:
+            port: 2181
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 20
+        livenessProbe:
+          tcpSocket:
+            port: 2181
+          initialDelaySeconds: 90
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 2181
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: zookeeper
+  labels:
+    app: zookeeper
+spec:
+  selector:
+    app: zookeeper
+  ports:
+    - protocol: TCP
+      port: 2181
+      targetPort: 2181
+
+# Kafka
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka
+  labels:
+    app: kafka
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka
+  template:
+    metadata:
+      labels:
+        app: kafka
+    spec:
+      initContainers:
+      - name: wait-for-zookeeper
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z zookeeper 2181; do echo waiting for zookeeper; sleep 2; done;']
+      containers:
+      - name: kafka
+        image: confluentinc/cp-kafka:7.8.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9092
+        env:
+        # Unset deprecated variables to avoid cp-kafka entrypoint aborting
+        - name: KAFKA_PORT
+          value: ""
+        - name: KAFKA_HOST
+          value: ""
+        - name: KAFKA_ADVERTISED_PORT
+          value: ""
+        - name: KAFKA_ADVERTISED_HOST
+          value: ""
+        - name: KAFKA_BROKER_ID
+          value: "1"
+        - name: KAFKA_ZOOKEEPER_CONNECT
+          value: zookeeper:2181
+        - name: KAFKA_ADVERTISED_LISTENERS
+          value: PLAINTEXT://kafka:9092
+        - name: KAFKA_LISTENERS
+          value: PLAINTEXT://0.0.0.0:9092
+        - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+          value: PLAINTEXT:PLAINTEXT
+        - name: KAFKA_INTER_BROKER_LISTENER_NAME
+          value: PLAINTEXT
+        - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+          value: "true"
+        - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+          value: "1"
+        - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+          value: "1"
+        - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+          value: "1"
+        - name: KAFKA_LOG_DIRS
+          value: /var/lib/kafka/data
+        resources:
+          requests:
+            memory: "768Mi"
+            cpu: "200m"
+          limits:
+            memory: "1536Mi"
+            cpu: "400m"
+        volumeMounts:
+        - name: kafka-data
+          mountPath: /var/lib/kafka/data
+        startupProbe:
+          tcpSocket:
+            port: 9092
+          initialDelaySeconds: 120
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 120
+        livenessProbe:
+          tcpSocket:
+            port: 9092
+          initialDelaySeconds: 120
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 9092
+          initialDelaySeconds: 90
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: kafka-data
+        persistentVolumeClaim:
+          claimName: kafka-pvc
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kafka-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  labels:
+    app: kafka
+spec:
+  selector:
+    app: kafka
+  ports:
+    - protocol: TCP
+      port: 9092
+      targetPort: 9092
+
+# Redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 6379
+        command: ["redis-server", "--appendonly", "yes"]
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "50m"
+          limits:
+            memory: "256Mi"
+            cpu: "100m"
+        livenessProbe:
+          tcpSocket:
+            port: 6379
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 6379
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        startupProbe:
+          tcpSocket:
+            port: 6379
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 20
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  selector:
+    app: redis
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+
+# Discovery Server
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: discoveryserver
+  labels:
+    app: discoveryserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: discoveryserver
+  template:
+    metadata:
+      labels:
+        app: discoveryserver
+    spec:
+      containers:
+      - name: discoveryserver
+        image: project3-discoveryserver:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8761
+        env:
+        - name: HOSTNAME
+          value: "discoveryserver"
+        - name: PORT
+          value: "8761"
+        - name: SPRING_PROFILES_ACTIVE
+          value: "production"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        startupProbe:
+          httpGet:
+            path: /
+            port: 8761
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 40
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8761
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8761
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apigateway
+  labels:
+    app: apigateway
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: apigateway
+  template:
+    metadata:
+      labels:
+        app: apigateway
+    spec:
+      initContainers:
+      - name: wait-for-redis
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done;']
+      - name: wait-for-discovery
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z discoveryserver 8761; do echo waiting for discoveryserver; sleep 2; done;']
+      - name: wait-for-keycloak
+        image: busybox:1.35
+        command: ['sh', '-c', 'echo "Waiting for Keycloak to be ready..."; timeout=300; elapsed=0; while ! nc -z keycloak 8180; do if [ $elapsed -ge $timeout ]; then echo "Timeout waiting for Keycloak after ${timeout}s, continuing anyway..."; break; fi; echo "Keycloak not ready yet, waiting... (${elapsed}s)"; sleep 5; elapsed=$((elapsed+5)); done; if nc -z keycloak 8180; then echo "Keycloak is ready!"; sleep 5; else echo "Keycloak not available, but continuing..."; fi']
+      containers:
+      - name: apigateway
+        image: project3-apigateway:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8081
+        env:
+        # Spring Boot relaxed binding: eureka.client.service-url.defaultZone
+        - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+          value: "http://discoveryserver:8761/eureka/"
+        # Spring Boot relaxed binding: eureka.instance.hostname
+        - name: EUREKA_INSTANCE_HOSTNAME
+          value: "apigateway"
+        # Lease renewal settings for faster heartbeat
+        - name: EUREKA_INSTANCE_LEASERENEWALINTERVALINSECONDS
+          value: "10"
+        - name: EUREKA_INSTANCE_LEASEEXPIRATIONDURATIONINSECONDS
+          value: "30"
+        - name: EUREKA_CLIENT_REGISTRYFETCHINTERVALSECONDS
+          value: "10"
+        # Redis configuration
+        - name: REDIS_HOST
+          value: "redis"
+        - name: KEYCLOAK_ISSUER_URI
+          value: "http://keycloak:8180/realms/project3"
+        # CORS configuration - adjust based on where frontend is deployed
+        # If frontend runs on dev machine: http://localhost:5173
+        # If frontend deployed in K8s: use LoadBalancer/Ingress URL (e.g., http://<minikube-ip>:5173)
+        # If frontend has domain: https://yourdomain.com
+        # To override: kubectl set env deployment/apigateway CORS_ALLOWED_ORIGINS="http://your-frontend-url:5173"
+        - name: CORS_ALLOWED_ORIGINS
+          value: "http://localhost:5173"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        startupProbe:
+          tcpSocket:
+            port: 8081
+          initialDelaySeconds: 60
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 40
+          successThreshold: 1
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8081
+            scheme: HTTP
+          initialDelaySeconds: 180
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8081
+            scheme: HTTP
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+          successThreshold: 1
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: discoveryserver
+  labels:
+    app: discoveryserver
+spec:
+  selector:
+    app: discoveryserver
+  ports:
+    - protocol: TCP
+      port: 8761
+      targetPort: 8761
+  type: NodePort
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: userservice
+  labels:
+    app: userservice
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: userservice
+  template:
+    metadata:
+      labels:
+        app: userservice
+    spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
+      - name: wait-for-discovery
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z discoveryserver 8761; do echo waiting for discoveryserver; sleep 2; done;']
+      - name: wait-for-keycloak
+        image: busybox:1.35
+        command: ['sh', '-c', 'echo "Waiting for Keycloak to be ready..."; timeout=300; elapsed=0; while ! nc -z keycloak 8180; do if [ $elapsed -ge $timeout ]; then echo "Timeout waiting for Keycloak after ${timeout}s, continuing anyway..."; break; fi; echo "Keycloak not ready yet, waiting... (${elapsed}s)"; sleep 5; elapsed=$((elapsed+5)); done; if nc -z keycloak 8180; then echo "Keycloak is ready!"; sleep 5; else echo "Keycloak not available, but continuing..."; fi']
+      containers:
+      - name: userservice
+        image: project3-userservice:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8005
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "production"
+        - name: PORT
+          value: "8005"
+        - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+          value: "http://discoveryserver:8761/eureka/"
+        - name: EUREKA_INSTANCE_HOSTNAME
+          value: "userservice"
+        - name: EUREKA_INSTANCE_LEASERENEWALINTERVALINSECONDS
+          value: "10"
+        - name: EUREKA_INSTANCE_LEASEEXPIRATIONDURATIONINSECONDS
+          value: "30"
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres:5432/UserService"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "postgres"
+        - name: SPRING_DATASOURCE_PASSWORD
+          value: "postgre"
+        - name: IDP_URL
+          value: "http://keycloak:8180"
+        - name: IDP_CLIENT_SECRET
+          value: "dxVFJPXOZLs1G2hf0FRoHY5OAa0aZcHA"
+        # IDP Redirect URI - adjust based on where frontend is deployed
+        # If frontend runs on dev machine: http://localhost:5173/auth/callback
+        # If frontend deployed in K8s: use LoadBalancer/Ingress URL (e.g., http://<minikube-ip>:5173/auth/callback)
+        # If frontend has domain: https://yourdomain.com/auth/callback
+        # To override: kubectl set env deployment/userservice IDP_REDIRECT_URI="http://your-frontend-url:5173/auth/callback"
+        - name: IDP_REDIRECT_URI
+          value: "http://localhost:5173/auth/callback"
+        - name: MAIL_PASSWORD
+          value: "rbgx isuc fdjc syyp"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        startupProbe:
+          tcpSocket:
+            port: 8005
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 40
+        livenessProbe:
+          tcpSocket:
+            port: 8005
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 8005
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: menuservice
+  labels:
+    app: menuservice
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: menuservice
+  template:
+    metadata:
+      labels:
+        app: menuservice
+    spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
+      - name: wait-for-axon
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z axonserver 8124; do echo waiting for axonserver; sleep 2; done;']
+      - name: wait-for-discovery
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z discoveryserver 8761; do echo waiting for discoveryserver; sleep 2; done;']
+      containers:
+      - name: menuservice
+        image: project3-menuservice:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8002
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "production"
+        - name: PORT
+          value: "8002"
+        - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+          value: "http://discoveryserver:8761/eureka/"
+        - name: EUREKA_INSTANCE_HOSTNAME
+          value: "menuservice"
+        - name: EUREKA_INSTANCE_LEASERENEWALINTERVALINSECONDS
+          value: "10"
+        - name: EUREKA_INSTANCE_LEASEEXPIRATIONDURATIONINSECONDS
+          value: "30"
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres:5432/MenuService"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "postgres"
+        - name: SPRING_DATASOURCE_PASSWORD
+          value: "postgre"
+        - name: AXON_AXONSERVER_SERVERS
+          value: "axonserver:8124"
+        - name: CLOUDINARY_CLOUD_NAME
+          value: "dswb2h4ny"
+        - name: CLOUDINARY_API_KEY
+          value: "413819856725241"
+        - name: CLOUDINARY_API_SECRET
+          value: "Ow82YqGHc_r1BspRU_2ElWsTlO0"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        startupProbe:
+          tcpSocket:
+            port: 8002
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 40
+        livenessProbe:
+          tcpSocket:
+            port: 8002
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 8002
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventoryservice
+  labels:
+    app: inventoryservice
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: inventoryservice
+  template:
+    metadata:
+      labels:
+        app: inventoryservice
+    spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
+      - name: wait-for-axon
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z axonserver 8124; do echo waiting for axonserver; sleep 2; done;']
+      - name: wait-for-discovery
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z discoveryserver 8761; do echo waiting for discoveryserver; sleep 2; done;']
+      containers:
+      - name: inventoryservice
+        image: project3-inventoryservice:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8003
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "production"
+        - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+          value: "http://discoveryserver:8761/eureka/"
+        - name: EUREKA_INSTANCE_HOSTNAME
+          value: "inventoryservice"
+        - name: EUREKA_INSTANCE_LEASERENEWALINTERVALINSECONDS
+          value: "10"
+        - name: EUREKA_INSTANCE_LEASEEXPIRATIONDURATIONINSECONDS
+          value: "30"
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres:5432/InventoryService"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "postgres"
+        - name: SPRING_DATASOURCE_PASSWORD
+          value: "postgre"
+        - name: AXON_AXONSERVER_SERVERS
+          value: "axonserver:8124"
+        - name: CLOUDINARY_CLOUD_NAME
+          value: "dswb2h4ny"
+        - name: CLOUDINARY_API_KEY
+          value: "413819856725241"
+        - name: CLOUDINARY_API_SECRET
+          value: "Ow82YqGHc_r1BspRU_2ElWsTlO0"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        startupProbe:
+          tcpSocket:
+            port: 8003
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 40
+        livenessProbe:
+          tcpSocket:
+            port: 8003
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 8003
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orderservice
+  labels:
+    app: orderservice
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: orderservice
+  template:
+    metadata:
+      labels:
+        app: orderservice
+    spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
+      - name: wait-for-axon
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z axonserver 8124; do echo waiting for axonserver; sleep 2; done;']
+      - name: wait-for-discovery
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z discoveryserver 8761; do echo waiting for discoveryserver; sleep 2; done;']
+      containers:
+      - name: orderservice
+        image: project3-orderservice:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8001
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "production"
+        - name: PORT
+          value: "8001"
+        - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+          value: "http://discoveryserver:8761/eureka/"
+        - name: EUREKA_INSTANCE_HOSTNAME
+          value: "orderservice"
+        - name: EUREKA_INSTANCE_LEASERENEWALINTERVALINSECONDS
+          value: "10"
+        - name: EUREKA_INSTANCE_LEASEEXPIRATIONDURATIONINSECONDS
+          value: "30"
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres:5432/OrderService"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "postgres"
+        - name: SPRING_DATASOURCE_PASSWORD
+          value: "postgre"
+        - name: AXON_AXONSERVER_SERVERS
+          value: "axonserver:8124"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        startupProbe:
+          tcpSocket:
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 40
+        livenessProbe:
+          tcpSocket:
+            port: 8001
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notificationservice
+  labels:
+    app: notificationservice
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: notificationservice
+  template:
+    metadata:
+      labels:
+        app: notificationservice
+    spec:
+      initContainers:
+      - name: wait-for-kafka
+        image: busybox:1.35
+        command: ['sh', '-c', 'echo "Waiting for Kafka to be ready..."; timeout=300; elapsed=0; while ! nc -z kafka 9092; do if [ $elapsed -ge $timeout ]; then echo "Timeout waiting for Kafka after ${timeout}s, continuing anyway..."; break; fi; echo "Kafka not ready yet, waiting... (${elapsed}s)"; sleep 5; elapsed=$((elapsed+5)); done; if nc -z kafka 9092; then echo "Kafka is ready!"; sleep 5; else echo "Kafka not available, but continuing..."; fi']
+      - name: wait-for-discovery
+        image: busybox:1.35
+        command: ['sh', '-c', 'echo "Waiting for Discovery Server to be ready..."; until nc -z discoveryserver 8761; do echo "Discovery Server not ready yet, waiting..."; sleep 5; done; echo "Discovery Server is ready!";']
+      containers:
+      - name: notificationservice
+        image: project3-notificationservice:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8004
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "production"
+        - name: PORT
+          value: "8004"
+        - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+          value: "http://discoveryserver:8761/eureka/"
+        - name: EUREKA_INSTANCE_HOSTNAME
+          value: "notificationservice"
+        - name: EUREKA_INSTANCE_LEASERENEWALINTERVALINSECONDS
+          value: "10"
+        - name: EUREKA_INSTANCE_LEASEEXPIRATIONDURATIONINSECONDS
+          value: "30"
+        - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+          value: "kafka:9092"
+        - name: SPRING_KAFKA_CONSUMER_GROUP_ID
+          value: "notificationservice-group"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        startupProbe:
+          tcpSocket:
+            port: 8004
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 40
+        livenessProbe:
+          tcpSocket:
+            port: 8004
+          initialDelaySeconds: 90
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 8004
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: apigateway
+  labels:
+    app: apigateway
+spec:
+  type: LoadBalancer
+  selector:
+    app: apigateway
+  ports:
+    - protocol: TCP
+      port: 8081
+      targetPort: 8081
+      name: http
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: userservice
+  labels:
+    app: userservice
+spec:
+  selector:
+    app: userservice
+  ports:
+    - protocol: TCP
+      port: 8005
+      targetPort: 8005
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: menuservice
+  labels:
+    app: menuservice
+spec:
+  selector:
+    app: menuservice
+  ports:
+    - protocol: TCP
+      port: 8002
+      targetPort: 8002
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventoryservice
+  labels:
+    app: inventoryservice
+spec:
+  selector:
+    app: inventoryservice
+  ports:
+    - protocol: TCP
+      port: 8003
+      targetPort: 8003
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orderservice
+  labels:
+    app: orderservice
+spec:
+  selector:
+    app: orderservice
+  ports:
+    - protocol: TCP
+      port: 8001
+      targetPort: 8001
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notificationservice
+  labels:
+    app: notificationservice
+spec:
+  selector:
+    app: notificationservice
+  ports:
+    - protocol: TCP
+      port: 8004
+      targetPort: 8004
+
+---
+# Keycloak Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  labels:
+    app: keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'echo "Waiting for PostgreSQL to be ready..."; until nc -z postgres 5432; do echo "PostgreSQL not ready yet, waiting..."; sleep 5; done; echo "PostgreSQL is ready!"; sleep 5;']
+      - name: import-gmail-cert
+        image: alpine:latest
+        command: ['sh', '-c', 'echo "Importing Gmail SSL certificate..."; apk add --no-cache openssl openjdk17-jre && echo | openssl s_client -connect smtp.gmail.com:587 -starttls smtp -showcerts 2>/dev/null | openssl x509 -outform PEM > /certs/gmail.pem && keytool -importcert -trustcacerts -file /certs/gmail.pem -alias gmail -keystore /certs/cacerts -storepass changeit -noprompt && cp /certs/cacerts /opt/keycloak/conf/cacerts && echo "Gmail certificate imported successfully" || echo "Failed to import certificate, continuing anyway..."']
+        volumeMounts:
+        - name: certs-volume
+          mountPath: /certs
+        - name: keycloak-conf
+          mountPath: /opt/keycloak/conf
+      containers:
+      - name: keycloak
+        # Use custom image with theme: project3-keycloak:26.4.2-theme
+        # To build: cd Keycloak && ./build-keycloak-image.sh (or .ps1 on Windows)
+        # Then: minikube image load project3-keycloak:26.4.2-theme
+        image: quay.io/keycloak/keycloak:26.4.2
+        imagePullPolicy: IfNotPresent
+        args:
+          - start-dev
+          - --db=postgres
+          - --db-url-host=postgres
+          - --db-url-port=5432
+          - --db-url-database=keycloak
+          - --db-username=postgres
+          - --db-password=postgre
+        ports:
+        - containerPort: 8180
+        volumeMounts:
+        - name: keycloak-conf
+          mountPath: /opt/keycloak/conf
+        env:
+        - name: KC_BOOTSTRAP_ADMIN_USERNAME
+          value: "admin"
+        - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+          value: "admin"
+        - name: KC_HTTP_PORT
+          value: "8180"
+        - name: KC_DB
+          value: "postgres"
+        - name: KC_DB_USERNAME
+          value: "postgres"
+        - name: KC_DB_PASSWORD
+          value: "postgre"
+        - name: KC_DB_URL_DATABASE
+          value: "keycloak"
+        - name: KC_DB_URL_HOST
+          value: "postgres"
+        - name: KC_DB_URL_PORT
+          value: "5432"
+        - name: KC_MAIL_HOST
+          value: "smtp.gmail.com"
+        - name: KC_MAIL_PORT
+          value: "587"
+        - name: KC_MAIL_FROM
+          value: "dodinhtrungthptyv@gmail.com"
+        - name: KC_MAIL_AUTH
+          value: "true"
+        - name: KC_MAIL_USER
+          value: "dodinhtrungthptyv@gmail.com"
+        - name: KC_MAIL_PASSWORD
+          value: "rbgx isuc fdjc syyp"
+        - name: KC_MAIL_STARTTLS
+          value: "true"
+        - name: KC_MAIL_SSL
+          value: "false"
+        - name: JAVA_OPTS_APPEND
+          value: "-Djavax.net.ssl.trustStore=/opt/keycloak/conf/cacerts -Djavax.net.ssl.trustStorePassword=changeit"
+        resources:
+          requests:
+            memory: "384Mi"
+            cpu: "200m"
+          limits:
+            memory: "768Mi"
+            cpu: "400m"
+        startupProbe:
+          tcpSocket:
+            port: 8180
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 60
+        livenessProbe:
+          tcpSocket:
+            port: 8180
+          initialDelaySeconds: 300
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          tcpSocket:
+            port: 8180
+          initialDelaySeconds: 180
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: certs-volume
+        emptyDir: {}
+      - name: keycloak-conf
+        emptyDir: {}
+      # Note: To use custom theme, build custom image with:
+      #   cd Keycloak && ./build-keycloak-image.sh
+      #   minikube image load project3-keycloak:26.4.2-theme
+      # Then update image above to: project3-keycloak:26.4.2-theme
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  labels:
+    app: keycloak
+spec:
+  type: LoadBalancer
+  selector:
+    app: keycloak
+  ports:
+    - protocol: TCP
+      port: 8180
+      targetPort: 8180
+      name: http
+

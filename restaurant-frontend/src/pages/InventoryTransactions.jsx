@@ -102,9 +102,9 @@ const InventoryTransactions = () => {
             }
 
             const response = await apiService.inventory.getTransactions(params);
-            const list = Array.isArray(response.data) ? response.data : (response.data?.transactions || []);
+            // Response interceptor đã extract data, response là list trực tiếp
+            const list = Array.isArray(response) ? response : [];
             console.log('Transactions API Response:', response);
-            console.log('Transactions Data:', response.data);
             console.log('Transactions List:', list);
             setTransactions(list);
             setPagination(prev => ({

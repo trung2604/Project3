@@ -40,7 +40,9 @@ const MenuCombos = () => {
         setLoading(true);
         try {
             const res = await apiService.menu.getCombos();
-            setCombos(res.data || []);
+            // Response interceptor đã extract data, response là list trực tiếp
+            const combos = Array.isArray(res) ? res : [];
+            setCombos(combos);
         } catch (e) {
             message.error('Lỗi tải combo');
         } finally {

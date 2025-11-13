@@ -11,15 +11,27 @@ import java.util.Optional;
 
 public interface MenuItemRepository extends JpaRepository<MenuItem, String> {
     
-    @Query("SELECT m FROM MenuItem m LEFT JOIN FETCH m.category WHERE " +
-           "(:categoryId IS NULL OR m.category.categoryId = :categoryId) AND " +
-           "(:active IS NULL OR m.active = :active) AND " +
-           "(:minPrice IS NULL OR m.price >= :minPrice) AND " +
-           "(:maxPrice IS NULL OR m.price <= :maxPrice)")
+    @Query(value = "SELECT mi.* FROM menu_items mi LEFT JOIN categories c ON c.category_id = mi.category_id WHERE " +
+           "(:categoryId IS NULL OR c.category_id = :categoryId) AND " +
+           "(:active IS NULL OR mi.active = :active) AND " +
+           "(:minPrice IS NULL OR mi.price >= :minPrice) AND " +
+           "(:maxPrice IS NULL OR mi.price <= :maxPrice) AND " +
+           "(:search IS NULL OR (mi.name IS NOT NULL AND LOWER(CAST(mi.name AS text)) LIKE LOWER('%' || CAST(:search AS text) || '%')) OR " +
+           "(mi.description IS NOT NULL AND LOWER(CAST(mi.description AS text)) LIKE LOWER('%' || CAST(:search AS text) || '%'))) " +
+           "ORDER BY mi.menu_item_id DESC",
+           countQuery = "SELECT COUNT(*) FROM menu_items mi LEFT JOIN categories c ON c.category_id = mi.category_id WHERE " +
+           "(:categoryId IS NULL OR c.category_id = :categoryId) AND " +
+           "(:active IS NULL OR mi.active = :active) AND " +
+           "(:minPrice IS NULL OR mi.price >= :minPrice) AND " +
+           "(:maxPrice IS NULL OR mi.price <= :maxPrice) AND " +
+           "(:search IS NULL OR (mi.name IS NOT NULL AND LOWER(CAST(mi.name AS text)) LIKE LOWER('%' || CAST(:search AS text) || '%')) OR " +
+           "(mi.description IS NOT NULL AND LOWER(CAST(mi.description AS text)) LIKE LOWER('%' || CAST(:search AS text) || '%')))",
+           nativeQuery = true)
     Page<MenuItem> findByFilters(@Param("categoryId") String categoryId,
                                  @Param("active") Boolean active,
                                  @Param("minPrice") Double minPrice,
                                  @Param("maxPrice") Double maxPrice,
+                                 @Param("search") String search,
                                  Pageable pageable);
 
     @EntityGraph(attributePaths = {"category", "ingredients"})

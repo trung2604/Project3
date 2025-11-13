@@ -63,6 +63,12 @@
 			<artifactId>lombok</artifactId>
 			<optional>true</optional>
 		</dependency>
+		<!-- Common Service for shared utilities and exception handling -->
+		<dependency>
+			<groupId>com.project3</groupId>
+			<artifactId>commonservice</artifactId>
+			<version>0.0.1-SNAPSHOT</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>

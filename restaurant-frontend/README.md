@@ -45,7 +45,7 @@ Hệ thống quản lý nhà hàng Golden Dragon được xây dựng với Reac
 - **Routing**: React Router DOM 6.x
 - **HTTP Client**: Axios
 - **Icons**: Ant Design Icons
-- **Backend API**: Spring Boot Microservices (Port 8080)
+- **Backend API**: Spring Boot Microservices (Port 8081 - API Gateway)
 
 ## 📦 Cài đặt và chạy
 
@@ -102,7 +102,7 @@ npm run build
 ### API Configuration
 File: `src/constants/index.js`
 ```javascript
-export const API_BASE_URL = 'http://localhost:8080';
+export const API_BASE_URL = 'http://localhost:8081';
 ```
 
 ### Restaurant Information

@@ -13,6 +13,32 @@ export function AuthProvider({ children }) {
         loadUser();
     }, []);
 
+    // Listen for storage events (when token is cleared by interceptor or other tabs)
+    useEffect(() => {
+        const handleStorageChange = (e) => {
+            // Check if accessToken was removed
+            if (e.key === 'accessToken') {
+                if (!localStorage.getItem('accessToken')) {
+                    // Token was cleared - reset auth state
+                    setUser(null);
+                    setRole(null);
+                    setLoading(false);
+                } else if (e.newValue) {
+                    // Token was added/updated - reload user
+                    loadUser();
+                }
+            }
+        };
+
+        // Listen for storage events (works for cross-tab communication)
+        // For same-tab changes, api.js dispatches a StorageEvent manually
+        window.addEventListener('storage', handleStorageChange);
+
+        return () => {
+            window.removeEventListener('storage', handleStorageChange);
+        };
+    }, []);
+
     const loadUser = async () => {
         const token = localStorage.getItem('accessToken');
         const storedUser = apiService.user.getStoredUser();

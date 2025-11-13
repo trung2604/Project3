@@ -45,8 +45,8 @@ const MenuView = () => {
             };
 
             const response = await apiService.menu.getMenuItems(params);
-            const data = response.data;
-            setMenuItems(data.items || []);
+            // Response interceptor đã extract data, response là PagedMenuItemResponse trực tiếp
+            setMenuItems(response?.items || []);
         } catch (error) {
             console.error('Error loading menu items:', error);
         } finally {
@@ -58,7 +58,9 @@ const MenuView = () => {
     const loadCategories = async () => {
         try {
             const response = await apiService.menu.getCategories();
-            setCategories(response.data || []);
+            // Response interceptor đã extract data, response là list trực tiếp
+            const categories = Array.isArray(response) ? response : [];
+            setCategories(categories);
         } catch (error) {
             console.error('Error loading categories:', error);
         }

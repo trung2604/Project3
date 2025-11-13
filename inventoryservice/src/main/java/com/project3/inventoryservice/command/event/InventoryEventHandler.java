@@ -1,5 +1,6 @@
 package com.project3.inventoryservice.command.event;
 
+import com.project3.commonservice.service.KafkaService;
 import com.project3.inventoryservice.command.entity.*;
 import org.axonframework.eventhandling.EventHandler;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +22,9 @@ public class InventoryEventHandler {
 
     @Autowired(required = false)
     private CloudinaryService cloudinaryService;
+    
+    @Autowired(required = false)
+    private KafkaService kafkaService;
     
     @EventHandler
     public void on(IngredientCreatedEvent event) {
@@ -224,6 +228,16 @@ public class InventoryEventHandler {
         alert.setMinStockLevel(event.getMinStockLevel());
         
         stockAlertRepository.save(alert);
+        
+        // Send to Kafka for Notification Service
+        if (kafkaService != null) {
+            try {
+                kafkaService.sendMessage("inventory-low-stock-alert", event);
+            } catch (Exception e) {
+                // Log error but don't fail the event handler
+                System.err.println("Failed to send LowStockAlertEvent to Kafka: " + e.getMessage());
+            }
+        }
     }
     
     @EventHandler
@@ -239,5 +253,15 @@ public class InventoryEventHandler {
         alert.setExpiryDate(event.getExpiryDate());
         
         stockAlertRepository.save(alert);
+        
+        // Send to Kafka for Notification Service
+        if (kafkaService != null) {
+            try {
+                kafkaService.sendMessage("inventory-expiry-alert", event);
+            } catch (Exception e) {
+                // Log error but don't fail the event handler
+                System.err.println("Failed to send ExpiryAlertEvent to Kafka: " + e.getMessage());
+            }
+        }
     }
 }

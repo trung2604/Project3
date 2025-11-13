@@ -73,9 +73,15 @@ public class SecurityConfig {
                         // Inventory: warehouse staff, restaurant manager, admin only
                         .pathMatchers("/api/inventory/**").hasAnyRole("WAREHOUSE_STAFF", "RESTAURANT_MANAGER", "ADMIN")
                         // Orders: customer can create/view own orders, staff/manager/admin can manage all
-                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/**").authenticated()
-                        .pathMatchers(HttpMethod.GET, "/api/restaurant/order/**").hasAnyRole("CUSTOMER", "STAFF", "RESTAURANT_MANAGER", "ADMIN")
-                        .pathMatchers(HttpMethod.PUT, "/api/restaurant/order/**").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/create").authenticated()
+                        .pathMatchers(HttpMethod.GET, "/api/restaurant/order", "/api/restaurant/order/**").hasAnyRole("CUSTOMER", "STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.PUT, "/api/restaurant/order/*/status").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/cancel").authenticated()
+                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/split-bill").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/start-cooking").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/mark-ready").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/start-delivering").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/complete").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
                         .pathMatchers(HttpMethod.PATCH, "/api/restaurant/order/**").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
                         .pathMatchers(HttpMethod.DELETE, "/api/restaurant/order/**").hasAnyRole("RESTAURANT_MANAGER", "ADMIN")
                         // Cloudinary: signature for authenticated users

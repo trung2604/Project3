@@ -44,7 +44,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(statusCode == 403 ? HttpStatus.FORBIDDEN : HttpStatus.UNAUTHORIZED)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
 
@@ -62,7 +62,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
 
@@ -80,7 +80,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
 
@@ -99,7 +99,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
 
@@ -117,7 +117,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
 
@@ -134,7 +134,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
 
@@ -151,7 +151,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
 
@@ -167,7 +167,7 @@ public class UserController {
             return ResponseEntity.ok(ApiResponseDTO.success(response, "Users retrieved successfully"));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ApiResponseDTO<>(false, "Failed to retrieve users: " + e.getMessage(), null, 500));
+                    .body(ApiResponseDTO.error("Failed to retrieve users: " + e.getMessage(), 500));
         }
     }
 
@@ -185,7 +185,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
 
@@ -202,7 +202,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
 
@@ -225,7 +225,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
 
@@ -237,7 +237,7 @@ public class UserController {
             String userId = userIdHeader;
             if (userId == null || userId.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(new ApiResponseDTO<>(false, "Missing X-User-Id header", null, 401));
+                        .body(ApiResponseDTO.error("Missing X-User-Id header", 401));
             }
             UserResponseDTO user = userService.getUserById(userId);
             return ResponseEntity.ok(ApiResponseDTO.success(user, "User retrieved successfully"));
@@ -247,7 +247,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
 
@@ -260,7 +260,7 @@ public class UserController {
             String userId = userIdHeader;
             if (userId == null || userId.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(new ApiResponseDTO<>(false, "Missing X-User-Id header", null, 401));
+                        .body(ApiResponseDTO.error("Missing X-User-Id header", 401));
             }
             UserResponseDTO user = userService.updateMyProfile(userId, request);
             return ResponseEntity.ok(ApiResponseDTO.success(user, "Profile updated successfully"));
@@ -270,7 +270,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
 
@@ -283,7 +283,7 @@ public class UserController {
             String userId = userIdHeader;
             if (userId == null || userId.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(new ApiResponseDTO<>(false, "Missing X-User-Id header", null, 401));
+                        .body(ApiResponseDTO.error("Missing X-User-Id header", 401));
             }
             userService.changeMyPassword(userId, request);
             return ResponseEntity.ok(ApiResponseDTO.success(null, "Password changed successfully"));
@@ -293,7 +293,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
     @PatchMapping("/{userId}/avatar")
@@ -310,7 +310,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
 
@@ -325,7 +325,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
     
@@ -340,7 +340,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
     
@@ -355,7 +355,7 @@ public class UserController {
                     httpRequest.getRequestURI()
             );
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new ApiResponseDTO<>(false, error.getMessage(), null, error.getStatus()));
+                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
         }
     }
 
@@ -370,6 +370,6 @@ public class UserController {
             errors.put(fieldName, errorMessage);
         });
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ApiResponseDTO<>(false, "Validation failed", errors, 400));
+                .body(ApiResponseDTO.error("Validation failed", 400));
     }
 }

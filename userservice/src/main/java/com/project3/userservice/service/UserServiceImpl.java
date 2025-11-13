@@ -30,6 +30,7 @@ public class UserServiceImpl implements IUserService {
     private final UserRepository userRepository;
     private final KeycloakService keycloakService;
     private final CloudinaryService cloudinaryService;
+    private final org.springframework.context.ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     public LoginResponseDTO login(LoginRequestDTO request) {
@@ -141,6 +142,9 @@ public class UserServiceImpl implements IUserService {
         // Send verification email
         keycloakService.sendVerificationEmail(savedUser.getUserId(), savedUser.getEmail());
         
+        // Publish user created event
+        applicationEventPublisher.publishEvent(savedUser);
+        
         return UserResponseDTO.fromEntity(savedUser);
     }
 
@@ -197,6 +201,10 @@ public class UserServiceImpl implements IUserService {
         if (!emailChanged) {
             updateUserInKeycloakProfile(user.getUserId(), request.getFirstName(), request.getLastName(), null, null, false);
         }
+        
+        // Publish user updated event
+        applicationEventPublisher.publishEvent(updatedUser);
+        
         return UserResponseDTO.fromEntity(updatedUser);
     }
 
@@ -311,6 +319,10 @@ public class UserServiceImpl implements IUserService {
         }
         
         User updatedUser = userRepository.save(user);
+        
+        // Publish user updated event
+        applicationEventPublisher.publishEvent(updatedUser);
+        
         return UserResponseDTO.fromEntity(updatedUser);
     }
 
@@ -332,6 +344,10 @@ public class UserServiceImpl implements IUserService {
         user.setAvatarUrl(request.getAvatarUrl());
         user.setAvatarPublicId(request.getAvatarPublicId());
         User updated = userRepository.save(user);
+        
+        // Publish user updated event
+        applicationEventPublisher.publishEvent(updated);
+        
         return UserResponseDTO.fromEntity(updated);
     }
 

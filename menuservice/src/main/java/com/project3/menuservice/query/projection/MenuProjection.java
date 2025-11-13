@@ -29,12 +29,16 @@ public class MenuProjection {
         int page = query.getPage() != null ? query.getPage() : 0;
         int size = query.getSize() != null ? query.getSize() : 20;
 
+        // For native query, don't use Sort in Pageable to avoid column name issues
+        // Sorting will be handled by default ORDER BY in query
         Pageable pageable = PageRequest.of(page, size);
+        
         Page<MenuItem> menuItemPage = menuItemRepository.findByFilters(
                 query.getCategoryId(),
                 query.getActive(),
                 query.getMinPrice(),
                 query.getMaxPrice(),
+                query.getSearch(),
                 pageable
         );
 

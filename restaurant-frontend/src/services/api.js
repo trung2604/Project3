@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../constants.js';
 
-// Create axios instance
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
     timeout: 10000,
@@ -10,8 +9,6 @@ const apiClient = axios.create({
     },
 });
 
-// Request interceptor
-// Note: API Gateway will decode JWT and add X-User-Id header automatically
 apiClient.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('accessToken');
@@ -25,32 +22,44 @@ apiClient.interceptors.request.use(
     }
 );
 
-// Response interceptor
 apiClient.interceptors.response.use(
     (response) => {
-        return response;
+        const apiResponse = response.data;
+        if (apiResponse && typeof apiResponse === 'object' && 'data' in apiResponse && 'statusCode' in apiResponse) {
+            return apiResponse.data;
+        }
+        return apiResponse;
     },
     (error) => {
-        // Enhanced error handling
         if (error.response?.status === 401) {
-            // Clear auth data on unauthorized
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
-            localStorage.removeItem('user');
-            console.error('401 Unauthorized - Session expired');
+            const token = localStorage.getItem('accessToken');
+            // Only clear token if token exists (not already logged out)
+            if (token) {
+                // Clear tokens but don't redirect here
+                // Let ProtectedRoute handle the redirect after token is cleared
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('refreshToken');
+                localStorage.removeItem('user');
+                console.error('401 Unauthorized - Session expired. Tokens cleared.');
+                
+                // Trigger a custom event so AuthContext can react immediately
+                // Note: 'storage' event only fires for changes from other tabs/windows
+                // For same-tab changes, we need to manually notify or use a custom event
+                window.dispatchEvent(new StorageEvent('storage', {
+                    key: 'accessToken',
+                    newValue: null,
+                    storageArea: localStorage
+                }));
+            }
         } else if (error.response?.status === 403) {
             console.error('403 Forbidden - Insufficient permissions');
-            console.error('Error details:', error.response?.data);
         } else if (error.response?.status === 404) {
             console.error('404 Not Found - Resource not found');
-            console.error('Requested URL:', error.config?.url);
         } else if (error.code === 'ERR_NETWORK') {
             console.error('Network Error - Check if API Gateway and services are running');
-            console.error('Base URL:', API_BASE_URL);
         } else if (error.code === 'ERR_CANCELED') {
             console.error('Request Canceled - Check CORS configuration');
         }
-
         return Promise.reject(error);
     }
 );

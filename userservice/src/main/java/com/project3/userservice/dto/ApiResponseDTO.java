@@ -8,36 +8,48 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ApiResponseDTO<T> {
-    private boolean success;
+    private Integer statusCode;
     private String message;
     private T data;
-    private Integer status;
 
     public static <T> ApiResponseDTO<T> success(T data, String message) {
         ApiResponseDTO<T> response = new ApiResponseDTO<>();
-        response.setSuccess(true);
+        response.setStatusCode(200);
         response.setMessage(message);
         response.setData(data);
-        response.setStatus(200);
         return response;
     }
 
     public static <T> ApiResponseDTO<T> created(T data, String message) {
         ApiResponseDTO<T> response = new ApiResponseDTO<>();
-        response.setSuccess(true);
+        response.setStatusCode(201);
         response.setMessage(message);
         response.setData(data);
-        response.setStatus(201);
         return response;
     }
 
     public static <T> ApiResponseDTO<T> noContent(String message) {
         ApiResponseDTO<T> response = new ApiResponseDTO<>();
-        response.setSuccess(true);
+        response.setStatusCode(204);
         response.setMessage(message);
         response.setData(null);
-        response.setStatus(204);
         return response;
+    }
+
+    public static <T> ApiResponseDTO<T> error(String message, Integer statusCode) {
+        ApiResponseDTO<T> response = new ApiResponseDTO<>();
+        response.setStatusCode(statusCode);
+        response.setMessage(message);
+        response.setData(null);
+        return response;
+    }
+
+    public static <T> ApiResponseDTO<T> badRequest(String message) {
+        return error(message, 400);
+    }
+
+    public static <T> ApiResponseDTO<T> notFound(String message) {
+        return error(message, 404);
     }
 }
 

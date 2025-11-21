@@ -12,9 +12,7 @@ import {
     BellOutlined,
     MenuFoldOutlined,
     WarningOutlined,
-    HistoryOutlined,
-    AppstoreOutlined,
-    AppstoreAddOutlined
+    HistoryOutlined
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { RESTAURANT_INFO } from '../../constants.js';
@@ -33,8 +31,6 @@ const iconMap = {
     inbox: <InboxOutlined />,
     warning: <WarningOutlined />,
     history: <HistoryOutlined />,
-    appstore: <AppstoreOutlined />,
-    'appstore-add': <AppstoreAddOutlined />,
     team: <TeamOutlined />,
     setting: <SettingOutlined />,
 };
@@ -52,8 +48,6 @@ const AppLayout = ({ children }) => {
         if (path.includes('inventory/alerts')) return 'inventory-alerts';
         if (path.includes('inventory/transactions')) return 'inventory-transactions';
         if (path.includes('inventory')) return 'inventory';
-        if (path.includes('menu/categories')) return 'menu-categories';
-        if (path.includes('menu/combos')) return 'menu-combos';
         if (path.includes('menu')) return 'menu';
         if (path.includes('orders')) return 'orders';
         if (path.includes('staff')) return 'staff';
@@ -68,8 +62,6 @@ const AppLayout = ({ children }) => {
         const pageTitleMap = {
             'overview': 'Dashboard Tổng Quan',
             'menu': 'Quản lý Thực đơn',
-            'menu-categories': 'Quản lý Danh mục',
-            'menu-combos': 'Quản lý Combo',
             'orders': 'Quản lý Đơn hàng',
             'inventory': 'Quản lý Kho',
             'inventory-alerts': 'Cảnh báo Kho',
@@ -104,10 +96,6 @@ const AppLayout = ({ children }) => {
             navigate('/dashboard/inventory/alerts');
         } else if (key === 'inventory-transactions') {
             navigate('/dashboard/inventory/transactions');
-        } else if (key === 'menu-categories') {
-            navigate('/dashboard/menu/categories');
-        } else if (key === 'menu-combos') {
-            navigate('/dashboard/menu/combos');
         } else {
             navigate(`/dashboard/${key}`);
         }

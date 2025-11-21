@@ -11,7 +11,7 @@ export const IDP = {
 
 // Restaurant Information
 export const RESTAURANT_INFO = {
-    name: 'Golden Dragon Restaurant',
+    name: "Trung's Restaurant",
     owner: 'Đỗ Đình Trung',
     email: 'dodinhtrungthptyv@gmail.com',
     phone: '0383034491',

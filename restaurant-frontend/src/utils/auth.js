@@ -56,8 +56,6 @@ export function getMenuItemsByRole(role) {
         { icon: 'inbox', key: 'inventory', label: 'Quản lý kho', roles: ['WAREHOUSE_STAFF', 'RESTAURANT_MANAGER', 'ADMIN'] },
         { icon: 'warning', key: 'inventory-alerts', label: 'Cảnh báo kho', roles: ['WAREHOUSE_STAFF', 'RESTAURANT_MANAGER', 'ADMIN'] },
         { icon: 'history', key: 'inventory-transactions', label: 'Lịch sử giao dịch', roles: ['WAREHOUSE_STAFF', 'RESTAURANT_MANAGER', 'ADMIN'] },
-        { icon: 'appstore', key: 'menu-categories', label: 'Danh mục', roles: ['STAFF', 'RESTAURANT_MANAGER', 'ADMIN'] },
-        { icon: 'appstore-add', key: 'menu-combos', label: 'Combo', roles: ['STAFF', 'RESTAURANT_MANAGER', 'ADMIN'] },
     ];
 
     const managerItems = [

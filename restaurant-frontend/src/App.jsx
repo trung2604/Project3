@@ -79,8 +79,8 @@ function App() {
                                                     <Route path="/inventory/alerts" element={<InventoryAlerts />} />
                                                     <Route path="/inventory/transactions" element={<InventoryTransactions />} />
                                                     <Route path="/menu" element={<Dashboard />} />
-                                                    <Route path="/menu/categories" element={<MenuCategories />} />
-                                                    <Route path="/menu/combos" element={<MenuCombos />} />
+                                                    {/* <Route path="/menu/categories" element={<MenuCategories />} /> */}
+                                                    {/* <Route path="/menu/combos" element={<MenuCombos />} /> */}
                                                     <Route path="/orders" element={<OrderManagement />} />
                                                     <Route path="/staff" element={<Staff />} />
                                                     <Route path="/settings" element={<Dashboard />} />

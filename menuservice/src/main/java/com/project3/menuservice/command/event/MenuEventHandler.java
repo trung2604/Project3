@@ -28,28 +28,17 @@ public class MenuEventHandler {
     
     @Autowired
     private CloudinaryService cloudinaryService;
+    
+    @Autowired
+    private com.project3.menuservice.command.service.MenuMapper menuMapper;
 
     @EventHandler
     public void on(MenuItemCreatedEvent event) {
         if (menuItemRepository.existsById(event.getMenuItemId())) {
             return;
         }
-        MenuItem item = new MenuItem();
-        item.setMenuItemId(event.getMenuItemId());
-        item.setName(event.getName());
-        
-        // Set category by ID
         Category category = categoryRepository.findById(event.getCategoryId()).orElse(null);
-        item.setCategory(category);
-        
-        item.setDescription(event.getDescription());
-        item.setPrice(event.getPrice());
-        item.setActive(Boolean.TRUE.equals(event.getActive()));
-        item.setImageUrl(event.getImageUrl());
-        item.setImagePublicId(event.getImagePublicId());
-        item.setPreparationTime(event.getPreparationTime());
-        item.setRecipe(event.getRecipe());
-        item.setIngredients(event.getIngredients() != null ? new ArrayList<>(event.getIngredients()) : new ArrayList<>());
+        MenuItem item = menuMapper.toMenuItemEntity(event, category);
         menuItemRepository.save(item);
     }
 
@@ -58,26 +47,19 @@ public class MenuEventHandler {
         Optional<MenuItem> optional = menuItemRepository.findById(event.getMenuItemId());
         if (optional.isEmpty()) return;
         MenuItem item = optional.get();
-        item.setName(event.getName());
-        
-        // Update category by ID
         Category category = categoryRepository.findById(event.getCategoryId()).orElse(null);
-        item.setCategory(category);
-        
-        item.setDescription(event.getDescription());
-        item.setPrice(event.getPrice());
-        item.setImageUrl(event.getImageUrl());
-        item.setImagePublicId(event.getImagePublicId());
-        item.setPreparationTime(event.getPreparationTime());
-        item.setRecipe(event.getRecipe());
-        item.setIngredients(event.getIngredients() != null ? new ArrayList<>(event.getIngredients()) : new ArrayList<>());
+        menuMapper.updateMenuItemFromEvent(item, event, category);
         menuItemRepository.save(item);
     }
 
     @EventHandler
     public void on(MenuItemActiveToggledEvent event) {
         menuItemRepository.findById(event.getMenuItemId()).ifPresent(item -> {
-            item.setActive(event.isActive());
+            if (event.isActive()) {
+                item.activate();
+            } else {
+                item.deactivate();
+            }
             menuItemRepository.save(item);
         });
     }
@@ -85,7 +67,15 @@ public class MenuEventHandler {
     @EventHandler
     public void on(MenuItemIngredientsAttachedEvent event) {
         menuItemRepository.findById(event.getMenuItemId()).ifPresent(item -> {
-            item.setIngredients(event.getIngredients() != null ? new ArrayList<>(event.getIngredients()) : new ArrayList<>());
+            // Clear existing ingredients and add new ones
+            if (item.getIngredients() != null) {
+                item.getIngredients().clear();
+            }
+            if (event.getIngredients() != null) {
+                for (String ingredientId : event.getIngredients()) {
+                    item.addIngredient(ingredientId);
+                }
+            }
             menuItemRepository.save(item);
         });
     }
@@ -104,7 +94,11 @@ public class MenuEventHandler {
     @EventHandler
     public void on(MenuItemAutoToggledEvent event) {
         menuItemRepository.findById(event.getMenuItemId()).ifPresent(item -> {
-            item.setActive(event.getActive());
+            if (Boolean.TRUE.equals(event.getActive())) {
+                item.activate();
+            } else {
+                item.deactivate();
+            }
             menuItemRepository.save(item);
         });
     }
@@ -115,12 +109,7 @@ public class MenuEventHandler {
         if (categoryRepository.existsById(event.getCategoryId())) {
             return;
         }
-        Category category = new Category();
-        category.setCategoryId(event.getCategoryId());
-        category.setName(event.getName());
-        category.setDescription(event.getDescription());
-        category.setType(event.getType());
-        category.setActive(Boolean.TRUE.equals(event.getActive()));
+        Category category = menuMapper.toCategoryEntity(event);
         categoryRepository.save(category);
     }
 
@@ -129,16 +118,18 @@ public class MenuEventHandler {
         Optional<Category> optional = categoryRepository.findById(event.getCategoryId());
         if (optional.isEmpty()) return;
         Category category = optional.get();
-        category.setName(event.getName());
-        category.setDescription(event.getDescription());
-        category.setType(event.getType());
+        menuMapper.updateCategoryFromEvent(category, event);
         categoryRepository.save(category);
     }
 
     @EventHandler
     public void on(CategoryActiveToggledEvent event) {
         categoryRepository.findById(event.getCategoryId()).ifPresent(category -> {
-            category.setActive(event.getActive());
+            if (event.getActive()) {
+                category.activate();
+            } else {
+                category.deactivate();
+            }
             categoryRepository.save(category);
         });
     }
@@ -154,14 +145,7 @@ public class MenuEventHandler {
         if (comboRepository.existsById(event.getComboId())) {
             return;
         }
-        Combo combo = new Combo();
-        combo.setComboId(event.getComboId());
-        combo.setName(event.getName());
-        combo.setDescription(event.getDescription());
-        combo.setPrice(event.getPrice());
-        combo.setDiscount(event.getDiscount());
-        combo.setActive(Boolean.TRUE.equals(event.getActive()));
-        combo.setMenuItemIds(event.getMenuItemIds() != null ? new ArrayList<>(event.getMenuItemIds()) : new ArrayList<>());
+        Combo combo = menuMapper.toComboEntity(event);
         comboRepository.save(combo);
     }
 
@@ -170,18 +154,18 @@ public class MenuEventHandler {
         Optional<Combo> optional = comboRepository.findById(event.getComboId());
         if (optional.isEmpty()) return;
         Combo combo = optional.get();
-        combo.setName(event.getName());
-        combo.setDescription(event.getDescription());
-        combo.setPrice(event.getPrice());
-        combo.setDiscount(event.getDiscount());
-        combo.setMenuItemIds(event.getMenuItemIds() != null ? new ArrayList<>(event.getMenuItemIds()) : new ArrayList<>());
+        menuMapper.updateComboFromEvent(combo, event);
         comboRepository.save(combo);
     }
 
     @EventHandler
     public void on(ComboActiveToggledEvent event) {
         comboRepository.findById(event.getComboId()).ifPresent(combo -> {
-            combo.setActive(event.getActive());
+            if (event.getActive()) {
+                combo.activate();
+            } else {
+                combo.deactivate();
+            }
             comboRepository.save(combo);
         });
     }
@@ -189,17 +173,15 @@ public class MenuEventHandler {
     @EventHandler
     public void on(MenuItemAddedToComboEvent event) {
         comboRepository.findById(event.getComboId()).ifPresent(combo -> {
-            if (!combo.getMenuItemIds().contains(event.getMenuItemId())) {
-                combo.getMenuItemIds().add(event.getMenuItemId());
-                comboRepository.save(combo);
-            }
+            combo.addMenuItem(event.getMenuItemId());
+            comboRepository.save(combo);
         });
     }
 
     @EventHandler
     public void on(MenuItemRemovedFromComboEvent event) {
         comboRepository.findById(event.getComboId()).ifPresent(combo -> {
-            combo.getMenuItemIds().remove(event.getMenuItemId());
+            combo.removeMenuItem(event.getMenuItemId());
             comboRepository.save(combo);
         });
     }

@@ -18,17 +18,19 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/inventory/ingredient")
 @Tag(name = "Ingredient Commands", description = "APIs để quản lý nguyên liệu (Commands)")
 @Slf4j
-public class IngredientCommandController {
+public class IngredientCommandController extends BaseInventoryController {
     
     @Autowired
     private CommandGateway commandGateway;
+    
+    @Autowired
+    private com.project3.inventoryservice.command.service.BulkOperationService bulkOperationService;
     
     @PostMapping
     @Operation(summary = "Tạo nguyên liệu mới", description = "Tạo một nguyên liệu mới trong hệ thống")
@@ -47,8 +49,7 @@ public class IngredientCommandController {
                     .body(ApiResponseDTO.created(result, "Ingredient created successfully"));
         } catch (Exception e) {
             log.error("Error creating ingredient: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to create ingredient: " + e.getMessage(), 400));
+            return badRequest("Failed to create ingredient: " + e.getMessage());
         }
     }
     
@@ -68,8 +69,7 @@ public class IngredientCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Ingredient updated successfully"));
         } catch (Exception e) {
             log.error("Error updating ingredient {}: {}", ingredientId, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to update ingredient: " + e.getMessage(), 400));
+            return badRequest("Failed to update ingredient: " + e.getMessage());
         }
     }
 
@@ -87,8 +87,7 @@ public class IngredientCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Ingredient deleted successfully"));
         } catch (Exception e) {
             log.error("Error deleting ingredient {}: {}", ingredientId, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to delete ingredient: " + e.getMessage(), 400));
+            return badRequest("Failed to delete ingredient: " + e.getMessage());
         }
     }
 
@@ -106,8 +105,7 @@ public class IngredientCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Ingredient status updated successfully"));
         } catch (Exception e) {
             log.error("Error toggling ingredient {} active status: {}", ingredientId, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to toggle ingredient status: " + e.getMessage(), 400));
+            return badRequest("Failed to toggle ingredient status: " + e.getMessage());
         }
     }
     
@@ -133,8 +131,7 @@ public class IngredientCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Stock in transaction completed successfully"));
         } catch (Exception e) {
             log.error("Error processing stock in for ingredient {}: {}", ingredientId, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to process stock in: " + e.getMessage(), 400));
+            return badRequest("Failed to process stock in: " + e.getMessage());
         }
     }
 
@@ -160,8 +157,7 @@ public class IngredientCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Stock out transaction completed successfully"));
         } catch (Exception e) {
             log.error("Error processing stock out for ingredient {}: {}", ingredientId, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to process stock out: " + e.getMessage(), 400));
+            return badRequest("Failed to process stock out: " + e.getMessage());
         }
     }
 
@@ -187,8 +183,7 @@ public class IngredientCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Stock adjustment completed successfully"));
         } catch (Exception e) {
             log.error("Error adjusting stock for ingredient {}: {}", ingredientId, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to adjust stock: " + e.getMessage(), 400));
+            return badRequest("Failed to adjust stock: " + e.getMessage());
         }
     }
 
@@ -214,8 +209,7 @@ public class IngredientCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Stock take completed successfully"));
         } catch (Exception e) {
             log.error("Error processing stock take for ingredient {}: {}", ingredientId, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to process stock take: " + e.getMessage(), 400));
+            return badRequest("Failed to process stock take: " + e.getMessage());
         }
     }
     
@@ -226,30 +220,25 @@ public class IngredientCommandController {
     })
     public ResponseEntity<ApiResponseDTO<Map<String, Object>>> bulkToggle(@RequestBody BulkToggleRequest request) {
         try {
-            int success = 0;
-            int failed = 0;
-            
-            for (String id : request.getIngredientIds()) {
-                try {
-                    ToggleIngredientActiveCommand cmd = new ToggleIngredientActiveCommand(id);
-                    commandGateway.sendAndWait(cmd);
-                    success++;
-                } catch (Exception e) {
-                    failed++;
+            Map<String, Object> result = bulkOperationService.executeBulkOperation(
+                request.getIngredientIds(),
+                id -> {
+                    try {
+                        ToggleIngredientActiveCommand cmd = new ToggleIngredientActiveCommand(id);
+                        commandGateway.sendAndWait(cmd);
+                        return true;
+                    } catch (Exception e) {
+                        return false;
+                    }
                 }
-            }
-            
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", success);
-            result.put("failed", failed);
-            result.put("total", request.getIngredientIds().size());
+            );
             
             return ResponseEntity.ok(ApiResponseDTO.success(result, 
-                    String.format("Successfully toggled %d ingredients, failed %d ingredients", success, failed)));
+                    String.format("Successfully toggled %d ingredients, failed %d ingredients", 
+                        result.get("success"), result.get("failed"))));
         } catch (Exception e) {
             log.error("Error bulk toggling ingredients: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to bulk toggle ingredients: " + e.getMessage(), 400));
+            return badRequest("Failed to bulk toggle ingredients: " + e.getMessage());
         }
     }
 
@@ -260,30 +249,25 @@ public class IngredientCommandController {
     })
     public ResponseEntity<ApiResponseDTO<Map<String, Object>>> bulkDelete(@RequestBody BulkDeleteRequest request) {
         try {
-            int success = 0;
-            int failed = 0;
-            
-            for (String id : request.getIngredientIds()) {
-                try {
-                    DeleteIngredientCommand cmd = new DeleteIngredientCommand(id);
-                    commandGateway.sendAndWait(cmd);
-                    success++;
-                } catch (Exception e) {
-                    failed++;
+            Map<String, Object> result = bulkOperationService.executeBulkOperation(
+                request.getIngredientIds(),
+                id -> {
+                    try {
+                        DeleteIngredientCommand cmd = new DeleteIngredientCommand(id);
+                        commandGateway.sendAndWait(cmd);
+                        return true;
+                    } catch (Exception e) {
+                        return false;
+                    }
                 }
-            }
-            
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", success);
-            result.put("failed", failed);
-            result.put("total", request.getIngredientIds().size());
+            );
             
             return ResponseEntity.ok(ApiResponseDTO.success(result, 
-                    String.format("Successfully deleted %d ingredients, failed %d ingredients", success, failed)));
+                    String.format("Successfully deleted %d ingredients, failed %d ingredients", 
+                        result.get("success"), result.get("failed"))));
         } catch (Exception e) {
             log.error("Error bulk deleting ingredients: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to bulk delete ingredients: " + e.getMessage(), 400));
+            return badRequest("Failed to bulk delete ingredients: " + e.getMessage());
         }
     }
 }

@@ -28,13 +28,16 @@ import java.util.Map;
 @RequestMapping("/api/restaurant/menu")
 @Tag(name = "Menu Item Commands", description = "APIs để quản lý món ăn (Commands)")
 @Slf4j
-public class MenuCommandController {
+public class MenuCommandController extends BaseMenuController {
 
     @Autowired
     private CommandGateway commandGateway;
     
     @Autowired
     private MenuItemRepository menuItemRepository;
+    
+    @Autowired
+    private com.project3.menuservice.command.service.BulkOperationService bulkOperationService;
 
     @PostMapping("/items")
     @Operation(summary = "Tạo món ăn mới", description = "Tạo một món ăn mới trong menu")
@@ -53,8 +56,7 @@ public class MenuCommandController {
                     .body(ApiResponseDTO.created(result, "Menu item created successfully"));
         } catch (Exception e) {
             log.error("Error creating menu item: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to create menu item: " + e.getMessage(), 400));
+            return badRequest("Failed to create menu item: " + e.getMessage());
         }
     }
 
@@ -74,8 +76,7 @@ public class MenuCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Menu item updated successfully"));
         } catch (Exception e) {
             log.error("Error updating menu item {}: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to update menu item: " + e.getMessage(), 400));
+            return badRequest("Failed to update menu item: " + e.getMessage());
         }
     }
 
@@ -96,7 +97,11 @@ public class MenuCommandController {
             return handleAggregateNotFoundFallback(id, () -> {
                 MenuItem menuItem = menuItemRepository.findById(id).orElse(null);
                 if (menuItem != null) {
-                    menuItem.setActive(active);
+                    if (active) {
+                        menuItem.activate();
+                    } else {
+                        menuItem.deactivate();
+                    }
                     menuItemRepository.save(menuItem);
                     return ResponseEntity.ok(ApiResponseDTO.success(id, "Menu item status updated successfully (synced with read model)"));
                 }
@@ -119,7 +124,11 @@ public class MenuCommandController {
                 return handleAggregateNotFoundFallback(id, () -> {
                     MenuItem menuItem = menuItemRepository.findById(id).orElse(null);
                     if (menuItem != null) {
-                        menuItem.setActive(active);
+                        if (active) {
+                            menuItem.activate();
+                        } else {
+                            menuItem.deactivate();
+                        }
                         menuItemRepository.save(menuItem);
                         return ResponseEntity.ok(ApiResponseDTO.success(id, "Menu item status updated successfully (synced with read model)"));
                     }
@@ -160,7 +169,15 @@ public class MenuCommandController {
             return handleAggregateNotFoundFallback(id, () -> {
                 MenuItem menuItem = menuItemRepository.findById(id).orElse(null);
                 if (menuItem != null) {
-                    menuItem.setIngredients(ingredients);
+                    // Clear existing and add new ingredients using entity methods
+                    if (menuItem.getIngredients() != null) {
+                        menuItem.getIngredients().clear();
+                    }
+                    if (ingredients != null) {
+                        for (String ingredientId : ingredients) {
+                            menuItem.addIngredient(ingredientId);
+                        }
+                    }
                     menuItemRepository.save(menuItem);
                     return ResponseEntity.ok(ApiResponseDTO.success(id, "Ingredients attached successfully (synced with read model)"));
                 }
@@ -168,32 +185,28 @@ public class MenuCommandController {
                         .body(ApiResponseDTO.error("Menu item not found: " + id, 404));
             });
         } catch (Exception e) {
-            // Check if the exception or its cause contains "aggregate" and "not found" in the message
-            String errorMessage = e.getMessage();
-            Throwable cause = e.getCause();
-            String causeMessage = cause != null ? cause.getMessage() : null;
-            
-            boolean isAggregateNotFound = (errorMessage != null && 
-                (errorMessage.toLowerCase().contains("aggregate") && errorMessage.toLowerCase().contains("not found"))) ||
-                (causeMessage != null && 
-                (causeMessage.toLowerCase().contains("aggregate") && causeMessage.toLowerCase().contains("not found")));
-            
-            if (isAggregateNotFound) {
-                log.warn("Aggregate not found in event store for menu item {} (wrapped exception), syncing with read model. Error: {}", id, errorMessage);
+            if (isAggregateNotFound(e)) {
+                log.warn("Aggregate not found in event store for menu item {} (wrapped exception), syncing with read model. Error: {}", id, e.getMessage());
                 return handleAggregateNotFoundFallback(id, () -> {
                     MenuItem menuItem = menuItemRepository.findById(id).orElse(null);
                     if (menuItem != null) {
-                        menuItem.setIngredients(ingredients);
+                        // Clear existing and add new ingredients using entity methods
+                        if (menuItem.getIngredients() != null) {
+                            menuItem.getIngredients().clear();
+                        }
+                        if (ingredients != null) {
+                            for (String ingredientId : ingredients) {
+                                menuItem.addIngredient(ingredientId);
+                            }
+                        }
                         menuItemRepository.save(menuItem);
                         return ResponseEntity.ok(ApiResponseDTO.success(id, "Ingredients attached successfully (synced with read model)"));
                     }
-                    return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                            .body(ApiResponseDTO.error("Menu item not found: " + id, 404));
+                    return notFound("Menu item not found: " + id);
                 });
             }
             log.error("Error attaching ingredients to menu item {}: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to attach ingredients: " + e.getMessage(), 400));
+            return badRequest("Failed to attach ingredients: " + e.getMessage());
         }
     }
 
@@ -205,8 +218,7 @@ public class MenuCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Menu item deleted successfully"));
         } catch (Exception e) {
             log.error("Error deleting menu item {}: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to delete menu item: " + e.getMessage(), 400));
+            return badRequest("Failed to delete menu item: " + e.getMessage());
         }
     }
 
@@ -220,8 +232,7 @@ public class MenuCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Menu item auto-toggled successfully"));
         } catch (Exception e) {
             log.error("Error auto-toggling menu item {}: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to auto-toggle menu item: " + e.getMessage(), 400));
+            return badRequest("Failed to auto-toggle menu item: " + e.getMessage());
         }
     }
     
@@ -232,30 +243,25 @@ public class MenuCommandController {
     })
     public ResponseEntity<ApiResponseDTO<Map<String, Object>>> bulkToggle(@RequestBody BulkToggleRequest request) {
         try {
-            int success = 0;
-            int failed = 0;
-            
-            for (String id : request.getMenuItemIds()) {
-                try {
-                    ToggleMenuItemActiveCommand cmd = new ToggleMenuItemActiveCommand(id, request.getActive());
-                    commandGateway.sendAndWait(cmd);
-                    success++;
-                } catch (Exception e) {
-                    failed++;
+            Map<String, Object> result = bulkOperationService.executeBulkOperation(
+                request.getMenuItemIds(),
+                id -> {
+                    try {
+                        ToggleMenuItemActiveCommand cmd = new ToggleMenuItemActiveCommand(id, request.getActive());
+                        commandGateway.sendAndWait(cmd);
+                        return true;
+                    } catch (Exception e) {
+                        return false;
+                    }
                 }
-            }
-            
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", success);
-            result.put("failed", failed);
-            result.put("total", request.getMenuItemIds().size());
+            );
             
             return ResponseEntity.ok(ApiResponseDTO.success(result, 
-                    String.format("Successfully toggled %d items, failed %d items", success, failed)));
+                    String.format("Successfully toggled %d items, failed %d items", 
+                        result.get("success"), result.get("failed"))));
         } catch (Exception e) {
             log.error("Error bulk toggling menu items: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to bulk toggle menu items: " + e.getMessage(), 400));
+            return badRequest("Failed to bulk toggle menu items: " + e.getMessage());
         }
     }
     
@@ -266,30 +272,25 @@ public class MenuCommandController {
     })
     public ResponseEntity<ApiResponseDTO<Map<String, Object>>> bulkDelete(@RequestBody BulkDeleteRequest request) {
         try {
-            int success = 0;
-            int failed = 0;
-            
-            for (String id : request.getMenuItemIds()) {
-                try {
-                    DeleteMenuItemCommand cmd = new DeleteMenuItemCommand(id);
-                    commandGateway.sendAndWait(cmd);
-                    success++;
-                } catch (Exception e) {
-                    failed++;
+            Map<String, Object> result = bulkOperationService.executeBulkOperation(
+                request.getMenuItemIds(),
+                id -> {
+                    try {
+                        DeleteMenuItemCommand cmd = new DeleteMenuItemCommand(id);
+                        commandGateway.sendAndWait(cmd);
+                        return true;
+                    } catch (Exception e) {
+                        return false;
+                    }
                 }
-            }
-            
-            Map<String, Object> result = new HashMap<>();
-            result.put("success", success);
-            result.put("failed", failed);
-            result.put("total", request.getMenuItemIds().size());
+            );
             
             return ResponseEntity.ok(ApiResponseDTO.success(result, 
-                    String.format("Successfully deleted %d items, failed %d items", success, failed)));
+                    String.format("Successfully deleted %d items, failed %d items", 
+                        result.get("success"), result.get("failed"))));
         } catch (Exception e) {
             log.error("Error bulk deleting menu items: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to bulk delete menu items: " + e.getMessage(), 400));
+            return badRequest("Failed to bulk delete menu items: " + e.getMessage());
         }
     }
 }

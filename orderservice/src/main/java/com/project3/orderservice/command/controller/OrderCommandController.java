@@ -20,23 +20,17 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/restaurant/order")
 @Slf4j
-public class OrderCommandController {
+public class OrderCommandController extends BaseOrderController {
 
     @Autowired
     private CommandGateway commandGateway;
-    
-    @Autowired
-    private OrderRespository orderRepository;
-    
-    @Autowired
-    private UserInfoService userInfoService;
 
     @PostMapping("/create")
     public ResponseEntity<ApiResponseDTO<String>> createOrder(
             @RequestBody CreateOrderCommand command,
             HttpServletRequest request) {
         try {
-            String currentUserId = SecurityUtils.getUserIdFromHeader(request);
+            String currentUserId = getCurrentUserId(request);
             command.setCreatedBy(currentUserId);
             
             if (command.getCustomerId() == null || command.getCustomerId().isEmpty()) {
@@ -52,15 +46,13 @@ public class OrderCommandController {
                     .body(ApiResponseDTO.created(result, "Order created successfully"));
         } catch (IllegalArgumentException e) {
             log.error("Invalid order data: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error(e.getMessage(), 400));
+            return badRequest(e.getMessage());
         } catch (org.springframework.web.server.ResponseStatusException e) {
             return ResponseEntity.status(e.getStatusCode())
                     .body(ApiResponseDTO.error(e.getReason(), e.getStatusCode().value()));
         } catch (Exception e) {
             log.error("Error creating order: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to create order: " + e.getMessage(), 400));
+            return badRequest("Failed to create order: " + e.getMessage());
         }
     }
 
@@ -72,19 +64,16 @@ public class OrderCommandController {
             @RequestParam(required = false) String notes,
             HttpServletRequest request) {
         try {
-            String currentUserId = SecurityUtils.getUserIdFromHeader(request);
-            var currentUser = userInfoService.getUserInfo(currentUserId);
-            
+            var currentUser = validateUser(request);
             if (currentUser == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(ApiResponseDTO.error("User not found", 401));
+                return unauthorized("User not found");
             }
             
-            if (!userInfoService.isStaffOrAbove(currentUser)) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(ApiResponseDTO.error("Only staff and above can update order status", 403));
+            if (!isStaffOrAbove(currentUser)) {
+                return forbidden("Only staff and above can update order status");
             }
             
+            String currentUserId = getCurrentUserId(request);
             UpdateOrderStatusCommand command = new UpdateOrderStatusCommand();
             command.setOrderId(orderId);
             command.setNewStatus(newStatus);
@@ -96,15 +85,13 @@ public class OrderCommandController {
                 "Order status updated to " + newStatus.name()));
         } catch (IllegalStateException e) {
             log.error("Invalid status transition: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error(e.getMessage(), 400));
+            return badRequest(e.getMessage());
         } catch (org.springframework.web.server.ResponseStatusException e) {
             return ResponseEntity.status(e.getStatusCode())
                     .body(ApiResponseDTO.error(e.getReason(), e.getStatusCode().value()));
         } catch (Exception e) {
             log.error("Error updating order status: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to update order status: " + e.getMessage(), 400));
+            return badRequest("Failed to update order status: " + e.getMessage());
         }
     }
 
@@ -114,26 +101,24 @@ public class OrderCommandController {
             @RequestBody CancelOrderRequest request,
             HttpServletRequest httpRequest) {
         try {
-            String currentUserId = SecurityUtils.getUserIdFromHeader(httpRequest);
-            var currentUser = userInfoService.getUserInfo(currentUserId);
-            
+            var currentUser = validateUser(httpRequest);
             if (currentUser == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(ApiResponseDTO.error("User not found", 401));
+                return unauthorized("User not found");
             }
             
             Order order = orderRepository.findById(orderId).orElse(null);
             if (order == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(ApiResponseDTO.error("Order not found", 404));
+                return notFound("Order not found");
             }
             
-            boolean isOwner = order.getCustomerId().equals(currentUserId);
-            boolean isStaffOrAbove = userInfoService.isStaffOrAbove(currentUser);
+            // Use entity method to check if order can be cancelled
+            if (!order.canBeCancelled()) {
+                return badRequest("Order cannot be cancelled. Current status: " + order.getOrderStatus());
+            }
             
-            if (!isOwner && !isStaffOrAbove) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(ApiResponseDTO.error("You can only cancel your own orders", 403));
+            String currentUserId = getCurrentUserId(httpRequest);
+            if (!canModifyOrder(order, currentUserId, currentUser)) {
+                return forbidden("You can only cancel your own orders");
             }
             
             CancelOrderCommand command = new CancelOrderCommand();
@@ -146,15 +131,13 @@ public class OrderCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Order cancelled successfully"));
         } catch (IllegalStateException e) {
             log.error("Cannot cancel order: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error(e.getMessage(), 400));
+            return badRequest(e.getMessage());
         } catch (org.springframework.web.server.ResponseStatusException e) {
             return ResponseEntity.status(e.getStatusCode())
                     .body(ApiResponseDTO.error(e.getReason(), e.getStatusCode().value()));
         } catch (Exception e) {
             log.error("Error cancelling order: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to cancel order: " + e.getMessage(), 400));
+            return badRequest("Failed to cancel order: " + e.getMessage());
         }
     }
 
@@ -164,19 +147,16 @@ public class OrderCommandController {
             @RequestBody SplitBillRequest request,
             HttpServletRequest httpRequest) {
         try {
-            String currentUserId = SecurityUtils.getUserIdFromHeader(httpRequest);
-            var currentUser = userInfoService.getUserInfo(currentUserId);
-            
+            var currentUser = validateUser(httpRequest);
             if (currentUser == null) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(ApiResponseDTO.error("User not found", 401));
+                return unauthorized("User not found");
             }
             
-            if (!userInfoService.isStaffOrAbove(currentUser)) {
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                        .body(ApiResponseDTO.error("Only staff and above can split bill", 403));
+            if (!isStaffOrAbove(currentUser)) {
+                return forbidden("Only staff and above can split bill");
             }
             
+            String currentUserId = getCurrentUserId(httpRequest);
             SplitBillCommand command = new SplitBillCommand();
             command.setOriginalOrderId(orderId);
             command.setNewOrderIds(request.getNewOrderIds());
@@ -187,15 +167,13 @@ public class OrderCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Bill split successfully"));
         } catch (IllegalStateException e) {
             log.error("Cannot split bill: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error(e.getMessage(), 400));
+            return badRequest(e.getMessage());
         } catch (org.springframework.web.server.ResponseStatusException e) {
             return ResponseEntity.status(e.getStatusCode())
                     .body(ApiResponseDTO.error(e.getReason(), e.getStatusCode().value()));
         } catch (Exception e) {
             log.error("Error splitting bill: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to split bill: " + e.getMessage(), 400));
+            return badRequest("Failed to split bill: " + e.getMessage());
         }
     }
 

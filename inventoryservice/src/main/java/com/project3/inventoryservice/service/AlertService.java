@@ -33,12 +33,13 @@ public class AlertService {
             boolean hasLowStockAlert = existingAlerts.stream()
                 .anyMatch(alert -> "LOW_STOCK".equals(alert.getAlertType()));
             
-            if (!hasLowStockAlert) {
+            // Use entity method to check low stock
+            if (!hasLowStockAlert && ingredient.isLowStock()) {
                 StockAlert alert = new StockAlert();
                 alert.setAlertId(IdGenerator.generateAlertId());
                 alert.setIngredientId(ingredient.getIngredientId());
                 alert.setAlertType("LOW_STOCK");
-                alert.setSeverity(ingredient.getCurrentStock() <= 0 ? "CRITICAL" : "HIGH");
+                alert.setSeverity(ingredient.isOutOfStock() ? "CRITICAL" : "HIGH");
                 alert.setMessage("Low stock alert for " + ingredient.getName() + 
                     ". Current: " + ingredient.getCurrentStock() + 
                     ", Min: " + ingredient.getMinStockLevel());
@@ -66,11 +67,12 @@ public class AlertService {
             boolean hasExpiryAlert = existingAlerts.stream()
                 .anyMatch(alert -> "EXPIRY".equals(alert.getAlertType()));
             
-            if (!hasExpiryAlert) {
+            // Use entity methods to check expiry status
+            if (!hasExpiryAlert && ingredient.isExpiring(warningDate)) {
                 String severity = "MEDIUM";
                 String message;
                 
-                if (ingredient.getExpiryDate().isBefore(today)) {
+                if (ingredient.isExpired()) {
                     severity = "CRITICAL";
                     message = "Ingredient " + ingredient.getName() + " has EXPIRED on " + ingredient.getExpiryDate();
                 } else if (ingredient.getExpiryDate().equals(today)) {

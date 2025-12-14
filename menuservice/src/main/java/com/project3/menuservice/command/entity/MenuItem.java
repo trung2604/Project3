@@ -32,6 +32,65 @@ public class MenuItem {
 
     @ElementCollection(fetch = FetchType.LAZY)
     private List<String> ingredients = new ArrayList<>();
+    
+    /**
+     * Business logic: Checks if menu item is active
+     */
+    public boolean isActive() {
+        return Boolean.TRUE.equals(this.active);
+    }
+    
+    /**
+     * Business logic: Activates the menu item
+     */
+    public void activate() {
+        this.active = true;
+    }
+    
+    /**
+     * Business logic: Deactivates the menu item
+     */
+    public void deactivate() {
+        this.active = false;
+    }
+    
+    /**
+     * Business logic: Toggles active status
+     */
+    public void toggleActive() {
+        this.active = !Boolean.TRUE.equals(this.active);
+    }
+    
+    /**
+     * Business logic: Checks if menu item has ingredients
+     */
+    public boolean hasIngredients() {
+        return this.ingredients != null && !this.ingredients.isEmpty();
+    }
+    
+    /**
+     * Business logic: Adds an ingredient to the menu item
+     */
+    public void addIngredient(String ingredientId) {
+        if (ingredientId == null || ingredientId.trim().isEmpty()) {
+            throw new IllegalArgumentException("Ingredient ID cannot be null or empty");
+        }
+        if (this.ingredients == null) {
+            this.ingredients = new ArrayList<>();
+        }
+        if (!this.ingredients.contains(ingredientId)) {
+            this.ingredients.add(ingredientId);
+        }
+    }
+    
+    /**
+     * Business logic: Removes an ingredient from the menu item
+     */
+    public void removeIngredient(String ingredientId) {
+        if (this.ingredients != null) {
+            this.ingredients.remove(ingredientId);
+        }
+    }
 }
 
 

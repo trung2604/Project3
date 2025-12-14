@@ -62,7 +62,7 @@ public class UserServiceImpl implements IUserService {
                     Boolean emailVerified = extractBooleanValue(kcUser, "emailVerified");
                     if (Boolean.TRUE.equals(emailVerified)) {
                         log.info("Email verified in Keycloak for user: {}. Activating user.", request.getUsername());
-                        user.setStatus(User.UserStatus.ACTIVE);
+                        user.activate();
                         userRepository.save(user);
                         // Ensure user is enabled in Keycloak
                         Boolean enabled = extractBooleanValue(kcUser, "enabled");
@@ -158,26 +158,30 @@ public class UserServiceImpl implements IUserService {
             if (userRepository.findByEmail(request.getEmail()).isPresent()) {
                 throw new EmailAlreadyExistsException(request.getEmail());
             }
-            user.setEmail(request.getEmail());
-            // Email change requires re-verify: set INACTIVE and trigger verify
-            user.setStatus(User.UserStatus.INACTIVE);
+            // Use entity method for email change
+            user.changeEmail(request.getEmail());
             updateUserInKeycloakProfile(user.getUserId(), request.getFirstName(), request.getLastName(), user.getEmail(), false, true);
             keycloakService.sendVerificationEmail(user.getUserId(), user.getEmail());
         }
 
-        if (request.getFirstName() != null) user.setFirstName(request.getFirstName());
-        if (request.getLastName() != null) user.setLastName(request.getLastName());
-        if (request.getPhone() != null) user.setPhone(request.getPhone());
-        if (request.getAddress() != null) user.setAddress(request.getAddress());
+        // Use entity method for profile update
+        user.updateProfile(request.getFirstName(), request.getLastName(), request.getPhone(), request.getAddress());
         if (request.getRole() != null) user.setRole(request.getRole());
         
         User.UserStatus oldStatus = user.getStatus();
         if (request.getStatus() != null) {
-            user.setStatus(request.getStatus());
+            // Use entity methods for status changes
             if (request.getStatus() == User.UserStatus.ACTIVE && oldStatus != User.UserStatus.ACTIVE) {
+                user.activate();
                 keycloakService.enableUser(user.getUserId());
-            } else if (request.getStatus() != User.UserStatus.ACTIVE && oldStatus == User.UserStatus.ACTIVE) {
+            } else if (request.getStatus() == User.UserStatus.INACTIVE && oldStatus == User.UserStatus.ACTIVE) {
+                user.deactivate();
                 keycloakService.disableUser(user.getUserId());
+            } else if (request.getStatus() == User.UserStatus.BANNED) {
+                user.ban();
+                keycloakService.disableUser(user.getUserId());
+            } else {
+                user.setStatus(request.getStatus());
             }
         }
         
@@ -310,12 +314,19 @@ public class UserServiceImpl implements IUserService {
                 .orElseThrow(() -> new UserNotFoundException("User not found with userId: " + userId));
         
         User.UserStatus oldStatus = user.getStatus();
-        user.setStatus(status);
         
+        // Use entity methods for status changes
         if (status == User.UserStatus.ACTIVE && oldStatus != User.UserStatus.ACTIVE) {
+            user.activate();
             keycloakService.enableUser(user.getUserId());
-        } else if (status != User.UserStatus.ACTIVE && oldStatus == User.UserStatus.ACTIVE) {
+        } else if (status == User.UserStatus.INACTIVE && oldStatus == User.UserStatus.ACTIVE) {
+            user.deactivate();
             keycloakService.disableUser(user.getUserId());
+        } else if (status == User.UserStatus.BANNED) {
+            user.ban();
+            keycloakService.disableUser(user.getUserId());
+        } else {
+            user.setStatus(status);
         }
         
         User updatedUser = userRepository.save(user);
@@ -415,7 +426,7 @@ public class UserServiceImpl implements IUserService {
                             
                             if (Boolean.TRUE.equals(emailVerified)) {
                                 log.info("Email verified in Keycloak for user: {}. Activating user during token exchange.", userId);
-                                user.setStatus(User.UserStatus.ACTIVE);
+                                user.activate();
                                 userRepository.save(user);
                                 
                                 // Ensure user is enabled in Keycloak
@@ -589,7 +600,7 @@ public class UserServiceImpl implements IUserService {
 
             if (Boolean.TRUE.equals(emailVerified)) {
                 log.info("Email verified in Keycloak for user: {}. Activating user.", userId);
-                user.setStatus(User.UserStatus.ACTIVE);
+                user.activate();
                 userRepository.save(user);
                 
                 // Ensure user is enabled in Keycloak

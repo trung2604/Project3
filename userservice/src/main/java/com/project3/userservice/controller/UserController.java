@@ -20,10 +20,13 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/users")
 @Slf4j
-public class UserController {
+public class UserController extends BaseUserController {
 
     @Autowired
     private IUserService userService;
+    
+    @Autowired
+    private com.project3.userservice.service.UserResponseBuilder responseBuilder;
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponseDTO<LoginResponseDTO>> login(
@@ -33,18 +36,8 @@ public class UserController {
             LoginResponseDTO response = userService.login(request);
             return ResponseEntity.ok(ApiResponseDTO.success(response, "Login successful"));
         } catch (RuntimeException e) {
-            String errorMessage = e.getMessage() != null ? e.getMessage() : "Login failed";
-            log.error("Login failed: {}", errorMessage);
-            
-            int statusCode = errorMessage.contains("not active") ? 403 : 401;
-            ErrorResponseDTO error = new ErrorResponseDTO(
-                    statusCode,
-                    errorMessage,
-                    statusCode == 403 ? "Forbidden" : "Unauthorized",
-                    httpRequest.getRequestURI()
-            );
-            return ResponseEntity.status(statusCode == 403 ? HttpStatus.FORBIDDEN : HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
+            log.error("Login failed: {}", e.getMessage());
+            return handleRuntimeException(e, httpRequest, 401);
         }
     }
 
@@ -57,12 +50,7 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.CREATED)
                     .body(ApiResponseDTO.created(user, "User registered successfully"));
         } catch (RuntimeException e) {
-            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
-                    e.getMessage() != null ? e.getMessage() : "Failed to register user",
-                    httpRequest.getRequestURI()
-            );
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
+            return badRequest(e.getMessage() != null ? e.getMessage() : "Failed to register user", httpRequest);
         }
     }
 
@@ -75,12 +63,7 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.CREATED)
                     .body(ApiResponseDTO.created(user, "User created successfully"));
         } catch (RuntimeException e) {
-            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
-                    e.getMessage() != null ? e.getMessage() : "Failed to create user",
-                    httpRequest.getRequestURI()
-            );
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
+            return badRequest(e.getMessage() != null ? e.getMessage() : "Failed to create user", httpRequest);
         }
     }
 
@@ -112,12 +95,7 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.OK)
                     .body(ApiResponseDTO.noContent("User deleted successfully"));
         } catch (RuntimeException e) {
-            ErrorResponseDTO error = ErrorResponseDTO.notFound(
-                    e.getMessage() != null ? e.getMessage() : "User not found with userId: " + userId,
-                    httpRequest.getRequestURI()
-            );
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
+            return notFound(e.getMessage() != null ? e.getMessage() : "User not found with userId: " + userId, httpRequest);
         }
     }
 
@@ -129,12 +107,7 @@ public class UserController {
             UserResponseDTO user = userService.getUserById(userId);
             return ResponseEntity.ok(ApiResponseDTO.success(user, "User retrieved successfully"));
         } catch (RuntimeException e) {
-            ErrorResponseDTO error = ErrorResponseDTO.notFound(
-                    e.getMessage() != null ? e.getMessage() : "User not found with userId: " + userId,
-                    httpRequest.getRequestURI()
-            );
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
+            return notFound(e.getMessage() != null ? e.getMessage() : "User not found with userId: " + userId, httpRequest);
         }
     }
 
@@ -146,12 +119,7 @@ public class UserController {
             UserResponseDTO user = userService.getUserByEmail(email);
             return ResponseEntity.ok(ApiResponseDTO.success(user, "User retrieved successfully"));
         } catch (RuntimeException e) {
-            ErrorResponseDTO error = ErrorResponseDTO.notFound(
-                    e.getMessage() != null ? e.getMessage() : "User not found with email: " + email,
-                    httpRequest.getRequestURI()
-            );
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
+            return notFound(e.getMessage() != null ? e.getMessage() : "User not found with email: " + email, httpRequest);
         }
     }
 
@@ -180,12 +148,7 @@ public class UserController {
             UserResponseDTO user = userService.toggleUserStatus(userId, status);
             return ResponseEntity.ok(ApiResponseDTO.success(user, "User status updated successfully"));
         } catch (RuntimeException e) {
-            ErrorResponseDTO error = ErrorResponseDTO.notFound(
-                    e.getMessage() != null ? e.getMessage() : "User not found with userId: " + userId,
-                    httpRequest.getRequestURI()
-            );
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
+            return notFound(e.getMessage() != null ? e.getMessage() : "User not found with userId: " + userId, httpRequest);
         }
     }
 
@@ -197,12 +160,7 @@ public class UserController {
             UserResponseDTO user = userService.syncEmailVerification(userId);
             return ResponseEntity.ok(ApiResponseDTO.success(user, "Email verified successfully. Account activated."));
         } catch (RuntimeException e) {
-            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
-                    e.getMessage() != null ? e.getMessage() : "Failed to verify email",
-                    httpRequest.getRequestURI()
-            );
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
+            return badRequest(e.getMessage() != null ? e.getMessage() : "Failed to verify email", httpRequest);
         }
     }
 
@@ -212,20 +170,10 @@ public class UserController {
             HttpServletRequest httpRequest) {
         try {
             var token = userService.exchangeAuthorizationCode(request);
-            LoginResponseDTO response = new LoginResponseDTO();
-            response.setAccessToken(token.getAccessToken());
-            response.setRefreshToken(token.getRefreshToken() != null ? token.getRefreshToken() : token.getIdToken());
-            response.setTokenType(token.getTokenType());
-            response.setExpiresIn(Long.parseLong(token.getExpiresIn()));
-            response.setRefreshExpiresIn(token.getRefreshExpiresIn() != null ? Long.parseLong(token.getRefreshExpiresIn()) : 1800L);
+            LoginResponseDTO response = responseBuilder.buildLoginResponse(token);
             return ResponseEntity.ok(ApiResponseDTO.success(response, "Token exchanged successfully"));
         } catch (RuntimeException e) {
-            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
-                    e.getMessage() != null ? e.getMessage() : "Failed to exchange code",
-                    httpRequest.getRequestURI()
-            );
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
+            return badRequest(e.getMessage() != null ? e.getMessage() : "Failed to exchange code", httpRequest);
         }
     }
 
@@ -236,18 +184,12 @@ public class UserController {
         try {
             String userId = userIdHeader;
             if (userId == null || userId.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(ApiResponseDTO.error("Missing X-User-Id header", 401));
+                return unauthorized("Missing X-User-Id header", httpRequest);
             }
             UserResponseDTO user = userService.getUserById(userId);
             return ResponseEntity.ok(ApiResponseDTO.success(user, "User retrieved successfully"));
         } catch (RuntimeException e) {
-            ErrorResponseDTO error = ErrorResponseDTO.notFound(
-                    e.getMessage() != null ? e.getMessage() : "User not found",
-                    httpRequest.getRequestURI()
-            );
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
+            return notFound(e.getMessage() != null ? e.getMessage() : "User not found", httpRequest);
         }
     }
 
@@ -259,18 +201,12 @@ public class UserController {
         try {
             String userId = userIdHeader;
             if (userId == null || userId.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(ApiResponseDTO.error("Missing X-User-Id header", 401));
+                return unauthorized("Missing X-User-Id header", httpRequest);
             }
             UserResponseDTO user = userService.updateMyProfile(userId, request);
             return ResponseEntity.ok(ApiResponseDTO.success(user, "Profile updated successfully"));
         } catch (RuntimeException e) {
-            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
-                    e.getMessage() != null ? e.getMessage() : "Failed to update profile",
-                    httpRequest.getRequestURI()
-            );
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
+            return badRequest(e.getMessage() != null ? e.getMessage() : "Failed to update profile", httpRequest);
         }
     }
 
@@ -282,18 +218,12 @@ public class UserController {
         try {
             String userId = userIdHeader;
             if (userId == null || userId.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                        .body(ApiResponseDTO.error("Missing X-User-Id header", 401));
+                return unauthorized("Missing X-User-Id header", httpRequest);
             }
             userService.changeMyPassword(userId, request);
             return ResponseEntity.ok(ApiResponseDTO.success(null, "Password changed successfully"));
         } catch (RuntimeException e) {
-            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
-                    e.getMessage() != null ? e.getMessage() : "Failed to change password",
-                    httpRequest.getRequestURI()
-            );
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
+            return badRequest(e.getMessage() != null ? e.getMessage() : "Failed to change password", httpRequest);
         }
     }
     @PatchMapping("/{userId}/avatar")
@@ -305,12 +235,7 @@ public class UserController {
             UserResponseDTO user = userService.updateUserAvatar(userId, request);
             return ResponseEntity.ok(ApiResponseDTO.success(user, "Avatar updated successfully"));
         } catch (RuntimeException e) {
-            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
-                    e.getMessage() != null ? e.getMessage() : "Failed to update avatar",
-                    httpRequest.getRequestURI()
-            );
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
+            return badRequest(e.getMessage() != null ? e.getMessage() : "Failed to update avatar", httpRequest);
         }
     }
 
@@ -320,12 +245,7 @@ public class UserController {
             userService.initializeKeycloakRoles();
             return ResponseEntity.ok(ApiResponseDTO.success("Roles initialized successfully", "All required roles have been created in Keycloak"));
         } catch (RuntimeException e) {
-            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
-                    e.getMessage() != null ? e.getMessage() : "Failed to initialize roles",
-                    httpRequest.getRequestURI()
-            );
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
+            return badRequest(e.getMessage() != null ? e.getMessage() : "Failed to initialize roles", httpRequest);
         }
     }
     
@@ -335,12 +255,7 @@ public class UserController {
             List<Map<String, Object>> roles = userService.getRealmRoles();
             return ResponseEntity.ok(ApiResponseDTO.success(roles, "Realm roles retrieved successfully"));
         } catch (RuntimeException e) {
-            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
-                    e.getMessage() != null ? e.getMessage() : "Failed to get realm roles",
-                    httpRequest.getRequestURI()
-            );
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
+            return badRequest(e.getMessage() != null ? e.getMessage() : "Failed to get realm roles", httpRequest);
         }
     }
     
@@ -350,12 +265,7 @@ public class UserController {
             List<Map<String, Object>> roles = userService.getClientRoles();
             return ResponseEntity.ok(ApiResponseDTO.success(roles, "Client roles retrieved successfully"));
         } catch (RuntimeException e) {
-            ErrorResponseDTO error = ErrorResponseDTO.badRequest(
-                    e.getMessage() != null ? e.getMessage() : "Failed to get client roles",
-                    httpRequest.getRequestURI()
-            );
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error(error.getMessage(), error.getStatus()));
+            return badRequest(e.getMessage() != null ? e.getMessage() : "Failed to get client roles", httpRequest);
         }
     }
 

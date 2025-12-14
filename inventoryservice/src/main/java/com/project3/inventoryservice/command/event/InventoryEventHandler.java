@@ -1,6 +1,5 @@
 package com.project3.inventoryservice.command.event;
 
-import com.project3.commonservice.service.KafkaService;
 import com.project3.inventoryservice.command.entity.*;
 import org.axonframework.eventhandling.EventHandler;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,8 +22,11 @@ public class InventoryEventHandler {
     @Autowired(required = false)
     private CloudinaryService cloudinaryService;
     
-    @Autowired(required = false)
-    private KafkaService kafkaService;
+    @Autowired
+    private com.project3.inventoryservice.command.service.StockTransactionMapper transactionMapper;
+    
+    @Autowired
+    private com.project3.inventoryservice.command.service.InventoryKafkaPublisher kafkaPublisher;
     
     @EventHandler
     public void on(IngredientCreatedEvent event) {
@@ -33,11 +35,11 @@ public class InventoryEventHandler {
         ingredient.setName(event.getName());
         ingredient.setDescription(event.getDescription());
         ingredient.setUnit(event.getUnit());
-        ingredient.setCurrentStock(event.getInitialStock());
+        ingredient.updateStock(event.getInitialStock()); // Use entity method
         ingredient.setMinStockLevel(event.getMinStockLevel());
         ingredient.setMaxStockLevel(event.getMaxStockLevel());
         ingredient.setExpiryDate(event.getExpiryDate());
-        ingredient.setActive(true);
+        ingredient.setActive(true); // New ingredient is active by default
         ingredient.setCreatedAt(event.getCreatedAt());
         ingredient.setSupplierName(event.getSupplierName());
         ingredient.setSupplierContact(event.getSupplierContact());
@@ -50,18 +52,12 @@ public class InventoryEventHandler {
         ingredientRepository.save(ingredient);
         
         // Create initial stock transaction
-        StockTransaction transaction = new StockTransaction();
-        transaction.setTransactionId("init-" + event.getIngredientId());
-        transaction.setIngredientId(event.getIngredientId());
-        transaction.setTransactionType("INITIAL_STOCK");
-        transaction.setQuantity(event.getInitialStock());
-        transaction.setUnit(event.getUnit());
-        transaction.setTransactionDate(event.getCreatedAt());
-        transaction.setReference("Initial Stock");
-        transaction.setCreatedBy("SYSTEM");
-        transaction.setStockBefore(0.0);
-        transaction.setStockAfter(event.getInitialStock());
-        
+        StockTransaction transaction = transactionMapper.createInitialStockTransaction(
+            event.getIngredientId(), 
+            event.getInitialStock(), 
+            event.getUnit(), 
+            event.getCreatedAt()
+        );
         stockTransactionRepository.save(transaction);
     }
     
@@ -95,7 +91,7 @@ public class InventoryEventHandler {
             if (cloudinaryService != null && ingredient.getImagePublicId() != null && !ingredient.getImagePublicId().isEmpty()) {
                 cloudinaryService.deleteImage(ingredient.getImagePublicId());
             }
-            ingredient.setActive(false);
+            ingredient.deactivate(); // Soft delete using entity method
             ingredientRepository.save(ingredient);
         }
     }
@@ -104,113 +100,68 @@ public class InventoryEventHandler {
     public void on(IngredientToggledEvent event) {
         Ingredient ingredient = ingredientRepository.findById(event.getIngredientId()).orElse(null);
         if (ingredient != null) {
-            ingredient.setActive(event.getActive());
+            if (event.getActive()) {
+                ingredient.setActive(true);
+            } else {
+                ingredient.deactivate();
+            }
             ingredientRepository.save(ingredient);
         }
     }
     
     @EventHandler
     public void on(StockInEvent event) {
-        // Update ingredient stock
+        // Update ingredient stock using entity method
         Ingredient ingredient = ingredientRepository.findById(event.getIngredientId()).orElse(null);
         if (ingredient != null) {
-            ingredient.setCurrentStock(event.getStockAfter());
+            ingredient.updateStock(event.getStockAfter());
             ingredientRepository.save(ingredient);
         }
         
         // Create stock transaction record
-        StockTransaction transaction = new StockTransaction();
-        transaction.setTransactionId(event.getTransactionId());
-        transaction.setIngredientId(event.getIngredientId());
-        transaction.setTransactionType("STOCK_IN");
-        transaction.setQuantity(event.getQuantity());
-        transaction.setUnit(event.getUnit());
-        transaction.setUnitCost(event.getUnitCost());
-        transaction.setTransactionDate(event.getTransactionDate());
-        transaction.setReference(event.getReference());
-        transaction.setNotes(event.getNotes());
-        transaction.setCreatedBy(event.getCreatedBy());
-        transaction.setStockBefore(event.getStockBefore());
-        transaction.setStockAfter(event.getStockAfter());
-        
+        StockTransaction transaction = transactionMapper.fromStockInEvent(event);
         stockTransactionRepository.save(transaction);
     }
     
     @EventHandler
     public void on(StockOutEvent event) {
-        // Update ingredient stock
+        // Update ingredient stock using entity method
         Ingredient ingredient = ingredientRepository.findById(event.getIngredientId()).orElse(null);
         if (ingredient != null) {
-            ingredient.setCurrentStock(event.getStockAfter());
+            ingredient.updateStock(event.getStockAfter());
             ingredientRepository.save(ingredient);
         }
         
         // Create stock transaction record
-        StockTransaction transaction = new StockTransaction();
-        transaction.setTransactionId(event.getTransactionId());
-        transaction.setIngredientId(event.getIngredientId());
-        transaction.setTransactionType("STOCK_OUT");
-        transaction.setQuantity(event.getQuantity());
-        transaction.setUnit(event.getUnit());
-        transaction.setTransactionDate(event.getTransactionDate());
-        transaction.setReference(event.getReference());
-        transaction.setReason(event.getReason());
-        transaction.setNotes(event.getNotes());
-        transaction.setCreatedBy(event.getCreatedBy());
-        transaction.setStockBefore(event.getStockBefore());
-        transaction.setStockAfter(event.getStockAfter());
-        
+        StockTransaction transaction = transactionMapper.fromStockOutEvent(event);
         stockTransactionRepository.save(transaction);
     }
     
     @EventHandler
     public void on(StockAdjustedEvent event) {
-        // Update ingredient stock
+        // Update ingredient stock using entity method
         Ingredient ingredient = ingredientRepository.findById(event.getIngredientId()).orElse(null);
         if (ingredient != null) {
-            ingredient.setCurrentStock(event.getStockAfter());
+            ingredient.updateStock(event.getStockAfter());
             ingredientRepository.save(ingredient);
         }
         
         // Create stock transaction record
-        StockTransaction transaction = new StockTransaction();
-        transaction.setTransactionId(event.getTransactionId());
-        transaction.setIngredientId(event.getIngredientId());
-        transaction.setTransactionType("ADJUSTMENT");
-        transaction.setQuantity(Math.abs(event.getAdjustmentQuantity()));
-        transaction.setUnit(event.getUnit());
-        transaction.setTransactionDate(event.getTransactionDate());
-        transaction.setReason(event.getReason());
-        transaction.setNotes(event.getNotes());
-        transaction.setCreatedBy(event.getCreatedBy());
-        transaction.setStockBefore(event.getStockBefore());
-        transaction.setStockAfter(event.getStockAfter());
-        
+        StockTransaction transaction = transactionMapper.fromStockAdjustedEvent(event);
         stockTransactionRepository.save(transaction);
     }
     
     @EventHandler
     public void on(StockTakenEvent event) {
-        // Update ingredient stock
+        // Update ingredient stock using entity method
         Ingredient ingredient = ingredientRepository.findById(event.getIngredientId()).orElse(null);
         if (ingredient != null) {
-            ingredient.setCurrentStock(event.getStockAfter());
+            ingredient.updateStock(event.getStockAfter());
             ingredientRepository.save(ingredient);
         }
         
         // Create stock transaction record
-        StockTransaction transaction = new StockTransaction();
-        transaction.setTransactionId(event.getTransactionId());
-        transaction.setIngredientId(event.getIngredientId());
-        transaction.setTransactionType("STOCK_TAKE");
-        transaction.setQuantity(event.getActualQuantity());
-        transaction.setUnit(event.getUnit());
-        transaction.setTransactionDate(event.getTransactionDate());
-        transaction.setNotes(event.getNotes() + " (Variance: " + event.getVariance() + ")");
-        transaction.setCreatedBy(event.getCreatedBy());
-        transaction.setStockBefore(event.getStockBefore());
-        transaction.setStockAfter(event.getStockAfter());
-        
+        StockTransaction transaction = transactionMapper.fromStockTakenEvent(event);
         stockTransactionRepository.save(transaction);
     }
     
@@ -230,14 +181,7 @@ public class InventoryEventHandler {
         stockAlertRepository.save(alert);
         
         // Send to Kafka for Notification Service
-        if (kafkaService != null) {
-            try {
-                kafkaService.sendMessage("inventory-low-stock-alert", event);
-            } catch (Exception e) {
-                // Log error but don't fail the event handler
-                System.err.println("Failed to send LowStockAlertEvent to Kafka: " + e.getMessage());
-            }
-        }
+        kafkaPublisher.publishLowStockAlert(event);
     }
     
     @EventHandler
@@ -255,13 +199,6 @@ public class InventoryEventHandler {
         stockAlertRepository.save(alert);
         
         // Send to Kafka for Notification Service
-        if (kafkaService != null) {
-            try {
-                kafkaService.sendMessage("inventory-expiry-alert", event);
-            } catch (Exception e) {
-                // Log error but don't fail the event handler
-                System.err.println("Failed to send ExpiryAlertEvent to Kafka: " + e.getMessage());
-            }
-        }
+        kafkaPublisher.publishExpiryAlert(event);
     }
 }

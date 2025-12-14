@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/restaurant/combo")
 @Slf4j
-public class ComboCommandController {
+public class ComboCommandController extends BaseMenuController {
 
     @Autowired
     private CommandGateway commandGateway;
@@ -29,8 +29,7 @@ public class ComboCommandController {
                     .body(ApiResponseDTO.created(result, "Combo created successfully"));
         } catch (Exception e) {
             log.error("Error creating combo: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to create combo: " + e.getMessage(), 400));
+            return badRequest("Failed to create combo: " + e.getMessage());
         }
     }
 
@@ -42,8 +41,7 @@ public class ComboCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Combo updated successfully"));
         } catch (Exception e) {
             log.error("Error updating combo {}: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to update combo: " + e.getMessage(), 400));
+            return badRequest("Failed to update combo: " + e.getMessage());
         }
     }
 
@@ -55,8 +53,7 @@ public class ComboCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Combo status updated successfully"));
         } catch (Exception e) {
             log.error("Error toggling combo {} active status: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to toggle combo status: " + e.getMessage(), 400));
+            return badRequest("Failed to toggle combo status: " + e.getMessage());
         }
     }
 
@@ -68,8 +65,7 @@ public class ComboCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Menu item added to combo successfully"));
         } catch (Exception e) {
             log.error("Error adding menu item {} to combo {}: {}", menuItemId, id, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to add menu item to combo: " + e.getMessage(), 400));
+            return badRequest("Failed to add menu item to combo: " + e.getMessage());
         }
     }
 
@@ -81,8 +77,7 @@ public class ComboCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Menu item removed from combo successfully"));
         } catch (Exception e) {
             log.error("Error removing menu item {} from combo {}: {}", menuItemId, id, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to remove menu item from combo: " + e.getMessage(), 400));
+            return badRequest("Failed to remove menu item from combo: " + e.getMessage());
         }
     }
 
@@ -94,8 +89,7 @@ public class ComboCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Combo deleted successfully"));
         } catch (Exception e) {
             log.error("Error deleting combo {}: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to delete combo: " + e.getMessage(), 400));
+            return badRequest("Failed to delete combo: " + e.getMessage());
         }
     }
 }

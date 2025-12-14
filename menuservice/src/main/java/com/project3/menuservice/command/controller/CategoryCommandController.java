@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/api/restaurant/category")
 @Slf4j
-public class CategoryCommandController {
+public class CategoryCommandController extends BaseMenuController {
 
     @Autowired
     private CommandGateway commandGateway;
@@ -29,8 +29,7 @@ public class CategoryCommandController {
                     .body(ApiResponseDTO.created(result, "Category created successfully"));
         } catch (Exception e) {
             log.error("Error creating category: {}", e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to create category: " + e.getMessage(), 400));
+            return badRequest("Failed to create category: " + e.getMessage());
         }
     }
 
@@ -42,8 +41,7 @@ public class CategoryCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Category updated successfully"));
         } catch (Exception e) {
             log.error("Error updating category {}: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to update category: " + e.getMessage(), 400));
+            return badRequest("Failed to update category: " + e.getMessage());
         }
     }
 
@@ -55,8 +53,7 @@ public class CategoryCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Category status updated successfully"));
         } catch (Exception e) {
             log.error("Error toggling category {} active status: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to toggle category status: " + e.getMessage(), 400));
+            return badRequest("Failed to toggle category status: " + e.getMessage());
         }
     }
 
@@ -68,8 +65,7 @@ public class CategoryCommandController {
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Category deleted successfully"));
         } catch (Exception e) {
             log.error("Error deleting category {}: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponseDTO.error("Failed to delete category: " + e.getMessage(), 400));
+            return badRequest("Failed to delete category: " + e.getMessage());
         }
     }
 }

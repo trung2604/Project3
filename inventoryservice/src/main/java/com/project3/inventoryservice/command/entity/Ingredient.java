@@ -60,4 +60,70 @@ public class Ingredient {
     // Image
     private String imageUrl;
     private String imagePublicId;
+    
+    /**
+     * Business logic: Updates current stock
+     * This method encapsulates the business rule for stock updates
+     */
+    public void updateStock(Double newStock) {
+        if (newStock == null || newStock < 0) {
+            throw new IllegalArgumentException("Stock cannot be negative");
+        }
+        this.currentStock = newStock;
+    }
+    
+    /**
+     * Business logic: Checks if ingredient has low stock
+     */
+    public boolean isLowStock() {
+        return this.currentStock <= this.minStockLevel;
+    }
+    
+    /**
+     * Business logic: Checks if ingredient is out of stock
+     */
+    public boolean isOutOfStock() {
+        return this.currentStock <= 0;
+    }
+    
+    /**
+     * Business logic: Checks if ingredient is expiring within warning days
+     */
+    public boolean isExpiring(java.time.LocalDate warningDate) {
+        if (this.expiryDate == null) {
+            return false;
+        }
+        return !this.expiryDate.isAfter(warningDate);
+    }
+    
+    /**
+     * Business logic: Checks if ingredient has expired
+     */
+    public boolean isExpired() {
+        if (this.expiryDate == null) {
+            return false;
+        }
+        return this.expiryDate.isBefore(java.time.LocalDate.now());
+    }
+    
+    /**
+     * Business logic: Checks if ingredient needs restocking
+     */
+    public boolean needsRestocking() {
+        return this.currentStock < this.minStockLevel;
+    }
+    
+    /**
+     * Business logic: Toggles active status
+     */
+    public void toggleActive() {
+        this.active = !this.active;
+    }
+    
+    /**
+     * Business logic: Deactivates ingredient (soft delete)
+     */
+    public void deactivate() {
+        this.active = false;
+    }
 }

@@ -93,4 +93,78 @@ public class User {
         INACTIVE,    // Tạm dừng
         BANNED       // Bị cấm
     }
+    
+    /**
+     * Business logic: Checks if user is active
+     */
+    public boolean isActive() {
+        return this.status == UserStatus.ACTIVE;
+    }
+    
+    /**
+     * Business logic: Activates the user
+     */
+    public void activate() {
+        this.status = UserStatus.ACTIVE;
+    }
+    
+    /**
+     * Business logic: Deactivates the user
+     */
+    public void deactivate() {
+        this.status = UserStatus.INACTIVE;
+    }
+    
+    /**
+     * Business logic: Bans the user
+     */
+    public void ban() {
+        this.status = UserStatus.BANNED;
+    }
+    
+    /**
+     * Business logic: Updates user profile information
+     */
+    public void updateProfile(String firstName, String lastName, String phone, String address) {
+        if (firstName != null) this.firstName = firstName;
+        if (lastName != null) this.lastName = lastName;
+        if (phone != null) this.phone = phone;
+        if (address != null) this.address = address;
+    }
+    
+    /**
+     * Business logic: Updates email and sets status to INACTIVE (requires re-verification)
+     */
+    public void changeEmail(String newEmail) {
+        if (newEmail == null || newEmail.trim().isEmpty()) {
+            throw new IllegalArgumentException("Email cannot be null or empty");
+        }
+        this.email = newEmail;
+        // Email change requires re-verification
+        this.status = UserStatus.INACTIVE;
+    }
+    
+    /**
+     * Business logic: Checks if user has a specific role
+     */
+    public boolean hasRole(UserRole role) {
+        return this.role == role;
+    }
+    
+    /**
+     * Business logic: Checks if user is staff or above
+     */
+    public boolean isStaffOrAbove() {
+        return this.role == UserRole.STAFF 
+            || this.role == UserRole.WAREHOUSE_STAFF
+            || this.role == UserRole.RESTAURANT_MANAGER
+            || this.role == UserRole.ADMIN;
+    }
+    
+    /**
+     * Business logic: Checks if user is admin or manager
+     */
+    public boolean isAdminOrManager() {
+        return this.role == UserRole.ADMIN || this.role == UserRole.RESTAURANT_MANAGER;
+    }
 }

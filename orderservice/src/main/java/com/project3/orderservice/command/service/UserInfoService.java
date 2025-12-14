@@ -5,17 +5,14 @@ import com.project3.commonservice.service.KafkaService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @Service
 @Slf4j
-public class UserInfoService {
+public class UserInfoService extends BaseHttpClientService {
     
     @Autowired
     private UserInfoCache userInfoCache;
@@ -25,15 +22,6 @@ public class UserInfoService {
     
     @Value("${services.user-service.url:http://user-service:8080}")
     private String userServiceUrl;
-    
-    private RestTemplate restTemplate;
-    
-    private RestTemplate getRestTemplate() {
-        if (restTemplate == null) {
-            restTemplate = new RestTemplate();
-        }
-        return restTemplate;
-    }
     
     public UserInfo getUserInfo(String userId) {
         if (userId == null || userId.isEmpty()) {
@@ -64,50 +52,37 @@ public class UserInfoService {
     }
     
     private UserInfo fetchUserInfoFromService(String userId) {
-        try {
-            String url = userServiceUrl + "/api/users/" + userId;
-            @SuppressWarnings("unchecked")
-            ResponseEntity<Map<String, Object>> response = getRestTemplate().exchange(
-                url, HttpMethod.GET, null, (Class<Map<String, Object>>) (Class<?>) Map.class);
-            
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Map<String, Object> body = response.getBody();
-                Object dataObj = body.get("data");
-                
-                if (dataObj instanceof Map) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> data = (Map<String, Object>) dataObj;
-                    
-                    UserInfo userInfo = new UserInfo();
-                    userInfo.setUserId(getStringValue(data, "userId"));
-                    userInfo.setUsername(getStringValue(data, "username"));
-                    userInfo.setEmail(getStringValue(data, "email"));
-                    
-                    Object roleObj = data.get("role");
-                    if (roleObj != null) {
-                        userInfo.setRole(roleObj.toString());
-                    }
-                    
-                    Object statusObj = data.get("status");
-                    if (statusObj != null) {
-                        userInfo.setStatus(statusObj.toString());
-                    }
-                    
-                    return userInfo;
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to fetch user info from service for userId {}: {}", userId, e.getMessage());
+        String url = userServiceUrl + "/api/users/" + userId;
+        Map<String, Object> responseBody = fetchFromService(url);
+        Map<String, Object> data = extractData(responseBody);
+        
+        if (data == null) {
+            return null;
         }
         
-        return null;
+        UserInfo userInfo = new UserInfo();
+        userInfo.setUserId(getStringValue(data, "userId"));
+        userInfo.setUsername(getStringValue(data, "username"));
+        userInfo.setEmail(getStringValue(data, "email"));
+        
+        Object roleObj = data.get("role");
+        if (roleObj != null) {
+            userInfo.setRole(roleObj.toString());
+        }
+        
+        Object statusObj = data.get("status");
+        if (statusObj != null) {
+            userInfo.setStatus(statusObj.toString());
+        }
+        
+        return userInfo;
     }
     
-    private String getStringValue(Map<String, Object> map, String key) {
-        Object value = map.get(key);
-        return value != null ? value.toString() : null;
-    }
-    
+    /**
+     * Checks if user has a specific role
+     * Note: This method works with UserInfo DTO, not User entity
+     * For User entity, use entity methods directly
+     */
     public boolean hasRole(UserInfo userInfo, String... roles) {
         if (userInfo == null || userInfo.getRole() == null) {
             return false;

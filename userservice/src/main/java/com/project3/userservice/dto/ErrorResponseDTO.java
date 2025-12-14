@@ -39,5 +39,13 @@ public class ErrorResponseDTO {
     public static ErrorResponseDTO internalServerError(String message, String path) {
         return new ErrorResponseDTO(500, message, "Internal Server Error", path);
     }
+    
+    public static ErrorResponseDTO unauthorized(String message, String path) {
+        return new ErrorResponseDTO(401, message, "Unauthorized", path);
+    }
+    
+    public static ErrorResponseDTO forbidden(String message, String path) {
+        return new ErrorResponseDTO(403, message, "Forbidden", path);
+    }
 }
 

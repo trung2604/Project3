@@ -5,10 +5,7 @@ import com.project3.commonservice.service.KafkaService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
@@ -16,7 +13,7 @@ import java.util.UUID;
 
 @Service
 @Slf4j
-public class MenuServiceClient {
+public class MenuServiceClient extends BaseHttpClientService {
     
     @Autowired
     private MenuItemIngredientsCache menuItemIngredientsCache;
@@ -26,15 +23,6 @@ public class MenuServiceClient {
     
     @Value("${services.menu-service.url:http://menu-service:8002}")
     private String menuServiceUrl;
-    
-    private RestTemplate restTemplate;
-    
-    private RestTemplate getRestTemplate() {
-        if (restTemplate == null) {
-            restTemplate = new RestTemplate();
-        }
-        return restTemplate;
-    }
     
     public List<String> getMenuItemIngredients(String menuItemId) {
         if (menuItemId == null || menuItemId.isEmpty()) {
@@ -68,31 +56,19 @@ public class MenuServiceClient {
         return ingredients != null ? ingredients : List.of();
     }
     
+    @SuppressWarnings("unchecked")
     private List<String> fetchMenuItemIngredientsFromService(String menuItemId) {
-        try {
-            String url = menuServiceUrl + "/api/restaurant/menu/items/" + menuItemId;
-            @SuppressWarnings("unchecked")
-            ResponseEntity<Map<String, Object>> response = getRestTemplate().exchange(
-                url, HttpMethod.GET, null, (Class<Map<String, Object>>) (Class<?>) Map.class);
-            
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Map<String, Object> body = response.getBody();
-                Object dataObj = body.get("data");
-                
-                if (dataObj instanceof Map) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> data = (Map<String, Object>) dataObj;
-                    Object ingredientsObj = data.get("ingredients");
-                    
-                    if (ingredientsObj instanceof List) {
-                        @SuppressWarnings("unchecked")
-                        List<String> ingredients = (List<String>) ingredientsObj;
-                        return ingredients;
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to fetch menu item ingredients from service for menuItemId {}: {}", menuItemId, e.getMessage());
+        String url = menuServiceUrl + "/api/restaurant/menu/items/" + menuItemId;
+        Map<String, Object> responseBody = fetchFromService(url);
+        Map<String, Object> data = extractData(responseBody);
+        
+        if (data == null) {
+            return List.of();
+        }
+        
+        Object ingredientsObj = data.get("ingredients");
+        if (ingredientsObj instanceof List) {
+            return (List<String>) ingredientsObj;
         }
         
         return List.of();

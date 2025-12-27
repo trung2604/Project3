@@ -1,7 +1,6 @@
 package com.project3.menuservice.command.service;
 
 import lombok.extern.slf4j.Slf4j;
-import org.axonframework.commandhandling.gateway.CommandGateway;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;

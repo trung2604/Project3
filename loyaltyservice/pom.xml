@@ -35,6 +35,12 @@
 			<artifactId>axon-spring-boot-starter</artifactId>
 			<version>4.9.1</version>
 		</dependency>
+		<!-- Force a modern Guava to avoid gRPC + Guava incompatibility at runtime -->
+		<dependency>
+			<groupId>com.google.guava</groupId>
+			<artifactId>guava</artifactId>
+			<version>33.0.0-jre</version>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.kafka</groupId>
 			<artifactId>spring-kafka</artifactId>

@@ -83,6 +83,7 @@ public class User {
     public enum UserRole {
         CUSTOMER,           // Khách hàng
         STAFF,              // Nhân viên phục vụ
+        KITCHEN_STAFF,      // Nhân viên bếp
         WAREHOUSE_STAFF,    // Nhân viên kho
         RESTAURANT_MANAGER, // Quản lý nhà hàng
         ADMIN               // Quản trị viên hệ thống
@@ -156,6 +157,7 @@ public class User {
      */
     public boolean isStaffOrAbove() {
         return this.role == UserRole.STAFF 
+            || this.role == UserRole.KITCHEN_STAFF
             || this.role == UserRole.WAREHOUSE_STAFF
             || this.role == UserRole.RESTAURANT_MANAGER
             || this.role == UserRole.ADMIN;

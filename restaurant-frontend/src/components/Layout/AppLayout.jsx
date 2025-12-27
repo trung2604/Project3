@@ -140,7 +140,8 @@ const AppLayout = ({ children }) => {
       ADMIN: "Quản trị viên",
       RESTAURANT_MANAGER: "Quản lý nhà hàng",
       WAREHOUSE_STAFF: "Nhân viên kho",
-      STAFF: "Nhân viên",
+      KITCHEN_STAFF: "Nhân viên bếp",
+      STAFF: "Nhân viên phục vụ",
       CUSTOMER: "Khách hàng",
     };
     return roleMap[role] || "Khách hàng";

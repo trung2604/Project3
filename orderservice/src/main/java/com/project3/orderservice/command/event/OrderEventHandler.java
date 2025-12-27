@@ -60,6 +60,9 @@ public class OrderEventHandler {
         
         // Publish payment request event
         eventPublisher.publishPaymentRequest(order);
+        
+        // Publish order created event for notifications
+        eventPublisher.publishOrderCreated(order);
     }
 
     @EventHandler
@@ -76,6 +79,14 @@ public class OrderEventHandler {
         
         log.info("Order {} status updated from {} to {}", 
             event.getOrderId(), event.getPreviousStatus(), event.getNewStatus());
+        
+        // Publish order status updated event for notifications
+        eventPublisher.publishOrderStatusUpdated(
+            order,
+            event.getPreviousStatus() != null ? event.getPreviousStatus().name() : "UNKNOWN",
+            event.getNewStatus().name(),
+            event.getUpdatedBy()
+        );
         
         // Publish order-completed event for loyalty points
         if (OrderConstants.STATUS_COMPLETED.equals(event.getNewStatus().name())) {
@@ -102,6 +113,9 @@ public class OrderEventHandler {
 
         orderRepository.save(order);
         log.info("Order {} cancelled: {}", event.getOrderId(), event.getCancellationReason());
+        
+        // Publish order cancelled event for notifications
+        eventPublisher.publishOrderCancelled(order, event.getCancellationReason());
     }
 
     @EventHandler

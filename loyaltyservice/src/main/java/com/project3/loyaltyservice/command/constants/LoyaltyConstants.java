@@ -22,5 +22,7 @@ public final class LoyaltyConstants {
     
     // Kafka Topics
     public static final String TOPIC_ORDER_COMPLETED = "order-completed";
+    public static final String TOPIC_POINTS_EARNED = "loyalty-points-earned";
+    public static final String TOPIC_VOUCHER_REDEEMED = "loyalty-voucher-redeemed";
 }
 

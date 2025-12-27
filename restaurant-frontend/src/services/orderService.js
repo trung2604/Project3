@@ -23,10 +23,15 @@ const orderAPI = {
         return await apiClient.post(API_ENDPOINTS.ORDER.CREATE, orderData);
     },
 
-    async updateOrderStatus(orderId, status, notes) {
-        const data = { newStatus: status };
-        if (notes) data.notes = notes;
-        return await apiClient.put(API_ENDPOINTS.ORDER.STATUS(orderId), data);
+    async updateOrderStatus(orderId, newStatus, updatedBy, notes) {
+        const queryParams = new URLSearchParams();
+        queryParams.append('newStatus', newStatus);
+        if (updatedBy) queryParams.append('updatedBy', updatedBy);
+        if (notes) queryParams.append('notes', notes);
+        
+        const queryString = queryParams.toString();
+        const url = `${API_ENDPOINTS.ORDER.STATUS(orderId)}?${queryString}`;
+        return await apiClient.put(url);
     },
 
     async cancelOrder(orderId, cancellationReason, allowCancellation = false) {

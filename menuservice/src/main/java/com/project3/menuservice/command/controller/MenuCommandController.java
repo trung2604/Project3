@@ -20,10 +20,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 @RestController
 @RequestMapping("/api/restaurant/menu")
 @Tag(name = "Menu Item Commands", description = "APIs để quản lý món ăn (Commands)")
@@ -142,16 +140,6 @@ public class MenuCommandController extends BaseMenuController {
         }
     }
     
-    private ResponseEntity<ApiResponseDTO<String>> handleAggregateNotFoundFallback(String id, java.util.function.Supplier<ResponseEntity<ApiResponseDTO<String>>> fallback) {
-        try {
-            return fallback.get();
-        } catch (Exception e) {
-            log.error("Error in fallback handler for menu item {}: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponseDTO.error("Failed to sync menu item: " + e.getMessage(), 500));
-        }
-    }
-
     @PatchMapping("/items/{id}/ingredients")
     public ResponseEntity<ApiResponseDTO<String>> attachIngredients(@PathVariable("id") String id, @RequestBody List<String> ingredients) {
         try {

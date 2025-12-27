@@ -42,6 +42,7 @@ import { canManageInventory } from '../utils/auth';
 import { useAuth } from '../context/AuthContext';
 import Loading from '../components/Common/Loading';
 import ErrorPage from '../components/Common/ErrorPage';
+import { dispatchDataRefresh, DATA_REFRESH_EVENTS } from '../utils/dataRefreshEvents';
 
 const { Option } = Select;
 const { Search } = Input;
@@ -195,6 +196,7 @@ const InventoryManagement = () => {
                 }
                 await apiService.inventory.createIngredient(values);
                 message.success('Tạo nguyên liệu thành công');
+                dispatchDataRefresh(DATA_REFRESH_EVENTS.INGREDIENT_CREATED, values);
             } else if (modalType === 'edit') {
                 // Ensure imageUrl is preserved if not changed
                 if (!values.imageUrl && selectedIngredient?.imageUrl) {
@@ -207,18 +209,23 @@ const InventoryManagement = () => {
                 }
                 await apiService.inventory.updateIngredient(selectedIngredient.ingredientId, values);
                 message.success('Cập nhật nguyên liệu thành công');
+                dispatchDataRefresh(DATA_REFRESH_EVENTS.INGREDIENT_UPDATED, { ...values, ingredientId: selectedIngredient.ingredientId });
             } else if (modalType === 'stock-in') {
                 await apiService.inventory.stockIn(selectedIngredient.ingredientId, values);
                 message.success('Nhập hàng thành công');
+                dispatchDataRefresh(DATA_REFRESH_EVENTS.INGREDIENT_UPDATED, { ingredientId: selectedIngredient.ingredientId });
             } else if (modalType === 'stock-out') {
                 await apiService.inventory.stockOut(selectedIngredient.ingredientId, values);
                 message.success('Xuất hàng thành công');
+                dispatchDataRefresh(DATA_REFRESH_EVENTS.INGREDIENT_UPDATED, { ingredientId: selectedIngredient.ingredientId });
             } else if (modalType === 'adjust') {
                 await apiService.inventory.adjustStock(selectedIngredient.ingredientId, values);
                 message.success('Điều chỉnh tồn kho thành công');
+                dispatchDataRefresh(DATA_REFRESH_EVENTS.INGREDIENT_UPDATED, { ingredientId: selectedIngredient.ingredientId });
             } else if (modalType === 'stock-take') {
                 await apiService.inventory.stockTake(selectedIngredient.ingredientId, values);
                 message.success('Kiểm kê tồn kho thành công');
+                dispatchDataRefresh(DATA_REFRESH_EVENTS.INGREDIENT_UPDATED, { ingredientId: selectedIngredient.ingredientId });
             }
 
             setModalVisible(false);
@@ -236,6 +243,7 @@ const InventoryManagement = () => {
         try {
             await apiService.inventory.toggleIngredientActive(id, active);
             message.success(`Đã ${active ? 'kích hoạt' : 'vô hiệu hóa'} nguyên liệu`);
+            dispatchDataRefresh(DATA_REFRESH_EVENTS.INGREDIENT_UPDATED, { ingredientId: id, active });
             loadIngredients(pagination.current, pagination.pageSize);
         } catch (error) {
             message.error('Lỗi khi thay đổi trạng thái');
@@ -247,6 +255,7 @@ const InventoryManagement = () => {
         try {
             await apiService.inventory.deleteIngredient(id);
             message.success('Xóa nguyên liệu thành công');
+            dispatchDataRefresh(DATA_REFRESH_EVENTS.INGREDIENT_DELETED, { ingredientId: id });
             loadIngredients(pagination.current, pagination.pageSize);
         } catch (error) {
             message.error('Lỗi khi xóa nguyên liệu');

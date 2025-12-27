@@ -8,6 +8,7 @@ import com.project3.orderservice.command.entity.OrderRespository;
 import com.project3.orderservice.query.dto.OrderResponse;
 import com.project3.orderservice.query.queries.GetAllOrderQuery;
 import com.project3.orderservice.query.queries.GetOrderByIdQuery;
+import lombok.extern.slf4j.Slf4j;
 import org.axonframework.queryhandling.QueryHandler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 @Component
+@Slf4j
 public class OrderProjection {
 
     @Autowired
@@ -26,26 +28,40 @@ public class OrderProjection {
 
     @QueryHandler
     public List<OrderResponse> getAllOrder(GetAllOrderQuery query) {
+        log.info("OrderProjection.getAllOrder called with: status={}, type={}, customerId={}, startDate={}, endDate={}", 
+                query.getStatus(), query.getType(), query.getCustomerId(), query.getStartDate(), query.getEndDate());
+        
         List<Order> orders;
+        long totalCount = orderRepository.count();
+        log.info("Total orders in database: {}", totalCount);
         
         if (query.getStatus() != null && query.getStartDate() != null && query.getEndDate() != null) {
             orders = orderRepository.findByStatusAndDateRange(
                 query.getStatus(), query.getStartDate(), query.getEndDate());
+            log.info("Query: findByStatusAndDateRange - found {} orders", orders.size());
         } else if (query.getStartDate() != null && query.getEndDate() != null) {
             orders = orderRepository.findByOrderDateBetween(query.getStartDate(), query.getEndDate());
+            log.info("Query: findByOrderDateBetween - found {} orders", orders.size());
         } else if (query.getStatus() != null) {
             orders = orderRepository.findByOrderStatus(query.getStatus());
+            log.info("Query: findByOrderStatus - found {} orders", orders.size());
         } else if (query.getType() != null) {
             orders = orderRepository.findByOrderType(query.getType());
+            log.info("Query: findByOrderType - found {} orders", orders.size());
         } else if (query.getCustomerId() != null) {
             orders = orderRepository.findByCustomerId(query.getCustomerId());
+            log.info("Query: findByCustomerId - found {} orders", orders.size());
         } else {
             orders = orderRepository.findAll();
+            log.info("Query: findAll - found {} orders", orders.size());
         }
         
-        return orders.stream()
+        List<OrderResponse> responses = orders.stream()
                 .map(this::mapToOrderResponse)
                 .collect(Collectors.toList());
+        
+        log.info("OrderProjection.getAllOrder returning {} OrderResponse objects", responses.size());
+        return responses;
     }
 
     @QueryHandler

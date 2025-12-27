@@ -24,6 +24,9 @@ public class NotificationService {
     @Autowired
     private NotificationRepository notificationRepository;
     
+    @Autowired
+    private WebSocketNotificationService webSocketNotificationService;
+    
     public Notification createNotification(String userId, String type, String title, 
                                           String message, String severity, String metadata) {
         Notification notification = new Notification();
@@ -41,6 +44,20 @@ public class NotificationService {
         
         Notification saved = notificationRepository.save(notification);
         log.info("Created notification {} for user {}", saved.getNotificationId(), userId);
+        
+        // Send notification via WebSocket
+        try {
+            NotificationResponse response = NotificationResponse.fromEntity(saved);
+            webSocketNotificationService.sendNotificationToUser(userId, response);
+            
+            // Also send unread count update
+            Long unreadCount = getUnreadCount(userId);
+            webSocketNotificationService.sendUnreadCountToUser(userId, unreadCount);
+        } catch (Exception e) {
+            log.warn("Failed to send WebSocket notification for user {}: {}", userId, e.getMessage());
+            // Don't fail the notification creation if WebSocket fails
+        }
+        
         return saved;
     }
     

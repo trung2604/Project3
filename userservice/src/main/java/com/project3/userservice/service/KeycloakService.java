@@ -364,10 +364,11 @@ public class KeycloakService {
      */
     public void initializeRoles() {
         log.info("Initializing required roles in Keycloak");
-        String[] roles = {"CUSTOMER", "STAFF", "WAREHOUSE_STAFF", "RESTAURANT_MANAGER", "ADMIN"};
+        String[] roles = {"CUSTOMER", "STAFF", "KITCHEN_STAFF", "WAREHOUSE_STAFF", "RESTAURANT_MANAGER", "ADMIN"};
         String[] descriptions = {
             "Khách hàng",
             "Nhân viên phục vụ",
+            "Nhân viên bếp",
             "Nhân viên kho",
             "Quản lý nhà hàng",
             "Quản trị viên hệ thống"

@@ -1,6 +1,7 @@
 package com.project3.orderservice.command.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
@@ -14,11 +15,13 @@ import java.util.Map;
 @Slf4j
 public abstract class BaseHttpClientService {
     
+    @Autowired(required = false)
     private RestTemplate restTemplate;
     
     protected RestTemplate getRestTemplate() {
         if (restTemplate == null) {
-            restTemplate = new RestTemplate();
+            restTemplate = new org.springframework.web.client.RestTemplate();
+            log.warn("RestTemplate not injected, creating default instance. Consider using @LoadBalanced RestTemplate for service discovery.");
         }
         return restTemplate;
     }

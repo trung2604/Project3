@@ -35,4 +35,5 @@ public interface IUserService {
     List<Map<String, Object>> getRealmRoles();
     List<Map<String, Object>> getClientRoles();
     void syncDeletedUsersFromKeycloak();
+    UserResponseDTO syncUserRole(String userId);
 }

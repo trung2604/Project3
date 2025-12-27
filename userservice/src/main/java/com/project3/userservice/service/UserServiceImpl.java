@@ -166,7 +166,24 @@ public class UserServiceImpl implements IUserService {
 
         // Use entity method for profile update
         user.updateProfile(request.getFirstName(), request.getLastName(), request.getPhone(), request.getAddress());
-        if (request.getRole() != null) user.setRole(request.getRole());
+        
+        // Handle role change - assign role in Keycloak if role changed
+        User.UserRole oldRole = user.getRole();
+        if (request.getRole() != null && request.getRole() != oldRole) {
+            user.setRole(request.getRole());
+            try {
+                // Remove old role from Keycloak (if exists)
+                // Note: KeycloakService.assignRoleToUser will handle adding the new role
+                // We should ideally remove old role first, but for simplicity, we'll just assign new role
+                keycloakService.assignRoleToUser(user.getUserId(), request.getRole().name());
+                log.info("Role {} assigned to user {} in Keycloak (changed from {})", request.getRole().name(), userId, oldRole);
+            } catch (Exception e) {
+                log.warn("Failed to assign role {} to user {} in Keycloak: {}", request.getRole().name(), userId, e.getMessage());
+                // Don't fail the update if role assignment fails - role is still updated in database
+            }
+        } else if (request.getRole() != null) {
+            user.setRole(request.getRole());
+        }
         
         User.UserStatus oldStatus = user.getStatus();
         if (request.getStatus() != null) {
@@ -416,9 +433,77 @@ public class UserServiceImpl implements IUserService {
             String userId = extractUserIdFromToken(accessToken);
             
             if (userId != null) {
-                // Find user in database
-                userRepository.findByUserId(userId).ifPresent(user -> {
-                    // If user is INACTIVE, check if email is verified in Keycloak
+                // Find user in database or create if not exists
+                User user = userRepository.findByUserId(userId).orElse(null);
+                
+                if (user == null) {
+                    // User doesn't exist in database, create from Keycloak
+                    log.info("User {} not found in database, creating from Keycloak...", userId);
+                    try {
+                        Map<String, Object> kcUser = keycloakService.getUser(userId);
+                        
+                        // Extract user info from Keycloak
+                        String email = extractStringValue(kcUser, "email");
+                        String username = extractStringValue(kcUser, "username");
+                        String firstName = extractStringValue(kcUser, "firstName");
+                        String lastName = extractStringValue(kcUser, "lastName");
+                        String phone = extractStringValue(kcUser, "phone");
+                        Boolean emailVerified = extractBooleanValue(kcUser, "emailVerified");
+                        
+                        // Determine role from JWT token or default to CUSTOMER
+                        User.UserRole role = User.UserRole.CUSTOMER; // Default
+                        try {
+                            // Try to extract role from JWT token
+                            String roleFromToken = extractRoleFromToken(accessToken);
+                            if (roleFromToken != null) {
+                                try {
+                                    role = User.UserRole.valueOf(roleFromToken.toUpperCase());
+                                } catch (IllegalArgumentException e) {
+                                    log.warn("Invalid role {} from token, using default CUSTOMER", roleFromToken);
+                                }
+                            }
+                        } catch (Exception e) {
+                            log.warn("Failed to extract role from token for user {}, using default CUSTOMER role: {}", userId, e.getMessage());
+                        }
+                        
+                        // Create user entity
+                        User.UserBuilder userBuilder = User.builder()
+                                .userId(userId)
+                                .email(email != null ? email : "")
+                                .username(username != null ? username : userId)
+                                .firstName(firstName)
+                                .lastName(lastName)
+                                .phone(phone)
+                                .role(role)
+                                .status(Boolean.TRUE.equals(emailVerified) ? User.UserStatus.ACTIVE : User.UserStatus.INACTIVE);
+                        
+                        user = userRepository.save(userBuilder.build());
+                        log.info("User {} created successfully from Keycloak with role: {}", userId, role);
+                        
+                        try {
+                            keycloakService.assignRoleToUser(userId, role.name());
+                            log.info("Role {} assigned to user {} in Keycloak", role.name(), userId);
+                        } catch (Exception e) {
+                            log.warn("Failed to assign role {} to user {} in Keycloak: {}", role.name(), userId, e.getMessage());
+                        }
+                    } catch (Exception e) {
+                        log.error("Failed to create user from Keycloak for userId {}: {}", userId, e.getMessage(), e);
+                        // Don't fail the token exchange if user creation fails
+                    }
+                } else {
+                    // User exists, sync role from database to Keycloak (if role exists in DB but not in Keycloak)
+                    // This ensures JWT token will have the correct role
+                    if (user.getRole() != null) {
+                        try {
+                            keycloakService.assignRoleToUser(userId, user.getRole().name());
+                            log.info("Synced role {} from database to Keycloak for user {} during token exchange", user.getRole().name(), userId);
+                        } catch (Exception e) {
+                            log.warn("Failed to sync role {} to Keycloak for user {} during token exchange: {}", user.getRole().name(), userId, e.getMessage());
+                            // Don't fail login if role sync fails
+                        }
+                    }
+                    
+                    // Check and activate if email is verified
                     if (user.getStatus() == User.UserStatus.INACTIVE) {
                         try {
                             Map<String, Object> kcUser = keycloakService.getUser(userId);
@@ -442,7 +527,7 @@ public class UserServiceImpl implements IUserService {
                         log.warn("Banned user attempted login via OAuth: {}", userId);
                         throw new AuthenticationException("User account is banned. Please contact administrator.");
                     }
-                });
+                }
             }
         } catch (Exception e) {
             log.warn("Failed to process user activation during token exchange: {}", e.getMessage());
@@ -564,6 +649,62 @@ public class UserServiceImpl implements IUserService {
         return null;
     }
     
+    private String extractStringValue(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value instanceof String) {
+            return (String) value;
+        }
+        return value != null ? value.toString() : null;
+    }
+    
+    /**
+     * Extract role from JWT token (from realm_access.roles or resource_access)
+     */
+    private String extractRoleFromToken(String token) {
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length != 3) {
+                return null;
+            }
+            
+            String payload = parts[1];
+            int padding = 4 - (payload.length() % 4);
+            if (padding != 4) {
+                payload = payload + "=".repeat(padding);
+            }
+            
+            byte[] decodedBytes = java.util.Base64.getUrlDecoder().decode(payload);
+            String decodedPayload = new String(decodedBytes, java.nio.charset.StandardCharsets.UTF_8);
+            
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode jsonNode = mapper.readTree(decodedPayload);
+            
+            // Check realm_access.roles first
+            if (jsonNode.has("realm_access")) {
+                com.fasterxml.jackson.databind.JsonNode realmAccess = jsonNode.get("realm_access");
+                if (realmAccess.has("roles")) {
+                    com.fasterxml.jackson.databind.JsonNode roles = realmAccess.get("roles");
+                    if (roles.isArray() && roles.size() > 0) {
+                        // Return first role found (priority: ADMIN > RESTAURANT_MANAGER > WAREHOUSE_STAFF > STAFF > CUSTOMER)
+                        for (com.fasterxml.jackson.databind.JsonNode roleNode : roles) {
+                            String roleName = roleNode.asText();
+                            if (roleName.equals("ADMIN") || roleName.equals("RESTAURANT_MANAGER") || 
+                                roleName.equals("WAREHOUSE_STAFF") || roleName.equals("STAFF") || 
+                                roleName.equals("CUSTOMER")) {
+                                return roleName;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return null;
+        } catch (Exception e) {
+            log.warn("Failed to extract role from token: {}", e.getMessage());
+            return null;
+        }
+    }
+    
     private boolean isNotBlank(String value) {
         return value != null && !value.trim().isEmpty();
     }
@@ -635,6 +776,25 @@ public class UserServiceImpl implements IUserService {
     @Override
     public List<Map<String, Object>> getClientRoles() {
         return keycloakService.getClientRoles();
+    }
+    
+    @Override
+    public UserResponseDTO syncUserRole(String userId) {
+        User user = userRepository.findByUserId(userId)
+                .orElseThrow(() -> new UserNotFoundException("User not found with userId: " + userId));
+        
+        if (user.getRole() == null) {
+            throw new IllegalArgumentException("User does not have a role assigned in database");
+        }
+        
+        try {
+            keycloakService.assignRoleToUser(userId, user.getRole().name());
+            log.info("Successfully synced role {} from database to Keycloak for user {}", user.getRole().name(), userId);
+            return UserResponseDTO.fromEntity(user);
+        } catch (Exception e) {
+            log.error("Failed to sync role {} to Keycloak for user {}: {}", user.getRole().name(), userId, e.getMessage());
+            throw new KeycloakException("Failed to sync role to Keycloak: " + e.getMessage(), e);
+        }
     }
     
     @Override

@@ -1,7 +1,6 @@
 package com.project3.loyaltyservice.command.controller;
 
 import com.project3.commonservice.dto.ApiResponseDTO;
-import com.project3.commonservice.security.SecurityUtils;
 import com.project3.loyaltyservice.command.commands.CreateLoyaltyAccountCommand;
 import com.project3.loyaltyservice.command.commands.EarnPointsCommand;
 import com.project3.loyaltyservice.command.commands.RedeemVoucherCommand;
@@ -9,7 +8,6 @@ import com.project3.loyaltyservice.command.entity.LoyaltyAccount;
 import com.project3.loyaltyservice.command.entity.LoyaltyAccountRepository;
 import com.project3.loyaltyservice.command.entity.Voucher;
 import com.project3.loyaltyservice.command.entity.VoucherRepository;
-import com.project3.loyaltyservice.command.enums.VoucherStatus;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.axonframework.commandhandling.gateway.CommandGateway;
@@ -33,9 +31,6 @@ public class LoyaltyCommandController extends BaseLoyaltyController {
     
     @Autowired
     private VoucherRepository voucherRepository;
-    
-    @Autowired
-    private VoucherValidationService voucherValidationService;
     
     @PostMapping("/accounts")
     public ResponseEntity<ApiResponseDTO<String>> createLoyaltyAccount(

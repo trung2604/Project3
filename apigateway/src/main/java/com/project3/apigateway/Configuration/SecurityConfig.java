@@ -19,6 +19,8 @@ import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsWebFilter;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
+import org.springframework.web.cors.reactive.CorsConfigurationSource;
+import org.springframework.web.server.ServerWebExchange;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Arrays;
@@ -58,7 +60,8 @@ public class SecurityConfig {
                                 "/api/users/*/verify-email",
                                 "/api/users/oauth/**",
                                 "/api/v1/public/**",
-                                "/actuator/**"
+                                "/actuator/**",
+                                "/ws/**" // WebSocket endpoints - allow all (authentication handled by service)
                         ).permitAll()
                         // Users: self profile endpoints - tất cả user đã đăng nhập
                         .pathMatchers("/api/users/me", "/api/users/me/**").authenticated()
@@ -66,22 +69,22 @@ public class SecurityConfig {
                         .pathMatchers("/api/users/**").hasAnyRole("RESTAURANT_MANAGER", "ADMIN")
                         // Menu: read public, write requires restaurant staff/manager/admin
                         .pathMatchers(HttpMethod.GET, "/api/restaurant/menu/**").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/api/restaurant/menu/**").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
-                        .pathMatchers(HttpMethod.PUT, "/api/restaurant/menu/**").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
-                        .pathMatchers(HttpMethod.PATCH, "/api/restaurant/menu/**").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/restaurant/menu/**").hasAnyRole("STAFF", "KITCHEN_STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.PUT, "/api/restaurant/menu/**").hasAnyRole("STAFF", "KITCHEN_STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.PATCH, "/api/restaurant/menu/**").hasAnyRole("STAFF", "KITCHEN_STAFF", "RESTAURANT_MANAGER", "ADMIN")
                         .pathMatchers(HttpMethod.DELETE, "/api/restaurant/menu/**").hasAnyRole("RESTAURANT_MANAGER", "ADMIN")
                         // Inventory: warehouse staff, restaurant manager, admin only
                         .pathMatchers("/api/inventory/**").hasAnyRole("WAREHOUSE_STAFF", "RESTAURANT_MANAGER", "ADMIN")
                         // Orders: customer can create/view own orders, staff/manager/admin can manage all
                         .pathMatchers(HttpMethod.POST, "/api/restaurant/order/create").authenticated()
-                        .pathMatchers(HttpMethod.GET, "/api/restaurant/order", "/api/restaurant/order/**").hasAnyRole("CUSTOMER", "STAFF", "RESTAURANT_MANAGER", "ADMIN")
-                        .pathMatchers(HttpMethod.PUT, "/api/restaurant/order/*/status").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.GET, "/api/restaurant/order", "/api/restaurant/order/**").hasAnyRole("CUSTOMER", "STAFF", "KITCHEN_STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.PUT, "/api/restaurant/order/*/status").hasAnyRole("STAFF", "KITCHEN_STAFF", "RESTAURANT_MANAGER", "ADMIN")
                         .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/cancel").authenticated()
-                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/split-bill").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
-                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/start-cooking").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
-                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/mark-ready").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
-                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/start-delivering").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
-                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/complete").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/split-bill").hasAnyRole("STAFF", "KITCHEN_STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/start-cooking").hasAnyRole("STAFF", "KITCHEN_STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/mark-ready").hasAnyRole("STAFF", "KITCHEN_STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/start-delivering").hasAnyRole("STAFF", "KITCHEN_STAFF", "RESTAURANT_MANAGER", "ADMIN")
+                        .pathMatchers(HttpMethod.POST, "/api/restaurant/order/*/complete").hasAnyRole("STAFF", "KITCHEN_STAFF", "RESTAURANT_MANAGER", "ADMIN")
                         .pathMatchers(HttpMethod.PATCH, "/api/restaurant/order/**").hasAnyRole("STAFF", "RESTAURANT_MANAGER", "ADMIN")
                         .pathMatchers(HttpMethod.DELETE, "/api/restaurant/order/**").hasAnyRole("RESTAURANT_MANAGER", "ADMIN")
                         // Cloudinary: signature for authenticated users
@@ -99,7 +102,7 @@ public class SecurityConfig {
     }
     
     @Bean
-    public org.springframework.web.cors.reactive.CorsConfigurationSource corsConfigurationSource() {
+    public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration corsConfig = new CorsConfiguration();
         // Support multiple origins separated by comma
         List<String> origins = Arrays.stream(allowedOrigins.split(","))
@@ -112,10 +115,24 @@ public class SecurityConfig {
         corsConfig.setAllowCredentials(true);
         corsConfig.setMaxAge(3600L);
         
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", corsConfig);
-        
-        return source;
+        // Custom CorsConfigurationSource that excludes WebSocket paths
+        return new CorsConfigurationSource() {
+            private final UrlBasedCorsConfigurationSource delegate = new UrlBasedCorsConfigurationSource();
+            
+            {
+                delegate.registerCorsConfiguration("/**", corsConfig);
+            }
+            
+            @Override
+            public CorsConfiguration getCorsConfiguration(ServerWebExchange exchange) {
+                String path = exchange.getRequest().getURI().getPath();
+                // Don't add CORS headers for WebSocket - let Notification Service handle it
+                if (path != null && path.startsWith("/ws/")) {
+                    return null; // No CORS config - Notification Service will handle it
+                }
+                return delegate.getCorsConfiguration(exchange);
+            }
+        };
     }
     
     @Bean
@@ -172,7 +189,8 @@ public class SecurityConfig {
                 .map(SimpleGrantedAuthority::new)
                 .collect(Collectors.toSet());
         
-        log.debug("Extracted authorities for user: realmRoles={}, clientRoles={}, authorities={}", 
+        // Log at INFO level for debugging authorization issues
+        log.info("Extracted authorities for user: realmRoles={}, clientRoles={}, authorities={}", 
                 realmRoles, clientRoles, authorities.stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList()));
         
         return authorities;

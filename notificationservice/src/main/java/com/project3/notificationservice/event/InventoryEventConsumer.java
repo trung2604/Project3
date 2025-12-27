@@ -1,6 +1,7 @@
 package com.project3.notificationservice.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.project3.notificationservice.client.UserServiceClient;
 import com.project3.notificationservice.service.NotificationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +13,7 @@ import org.springframework.retry.annotation.Backoff;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -23,6 +25,9 @@ public class InventoryEventConsumer {
     
     @Autowired
     private ObjectMapper objectMapper;
+    
+    @Autowired
+    private UserServiceClient userServiceClient;
     
     @RetryableTopic(
         attempts = "4",
@@ -60,25 +65,28 @@ public class InventoryEventConsumer {
             
             String metadataJson = objectMapper.writeValueAsString(metadata);
             
-            // Create notification for admin/manager (userId = "admin" or "manager")
-            // In real scenario, you would query for users with manager/admin roles
             String title = "Cảnh báo tồn kho thấp: " + ingredientName;
             String notificationMessage = alertMessage != null ? alertMessage 
                 : String.format("Nguyên liệu %s đang có tồn kho thấp. Hiện tại: %.2f, Tối thiểu: %.2f", 
                     ingredientName, currentStock != null ? currentStock : 0, 
                     minStockLevel != null ? minStockLevel : 0);
             
-            // Create notification for admin
-            notificationService.createNotification(
-                "admin", // In production, get from user service or role-based
-                "INVENTORY_ALERT",
-                title,
-                notificationMessage,
-                severity != null ? severity : "HIGH",
-                metadataJson
-            );
+            // Notify warehouse staff, managers, and admins
+            List<String> userIds = userServiceClient.getUserIdsByRoles(
+                "WAREHOUSE_STAFF", "RESTAURANT_MANAGER", "ADMIN");
             
-            log.info("Created notification for low stock alert: {}", ingredientName);
+            for (String userId : userIds) {
+                notificationService.createNotification(
+                    userId,
+                    "INVENTORY_ALERT",
+                    title,
+                    notificationMessage,
+                    severity != null ? severity : "HIGH",
+                    metadataJson
+                );
+            }
+            
+            log.info("Created notification for low stock alert: {} to {} users", ingredientName, userIds.size());
             
         } catch (Exception e) {
             log.error("Error processing LowStockAlertEvent: {}", e.getMessage(), e);
@@ -119,17 +127,22 @@ public class InventoryEventConsumer {
             String notificationMessage = alertMessage != null ? alertMessage 
                 : String.format("Nguyên liệu %s sẽ hết hạn vào ngày %s", ingredientName, expiryDate);
             
-            // Create notification for admin/manager
-            notificationService.createNotification(
-                "admin",
-                "INVENTORY_ALERT",
-                title,
-                notificationMessage,
-                severity != null ? severity : "HIGH",
-                metadataJson
-            );
+            // Notify warehouse staff, managers, and admins
+            List<String> userIds = userServiceClient.getUserIdsByRoles(
+                "WAREHOUSE_STAFF", "RESTAURANT_MANAGER", "ADMIN");
             
-            log.info("Created notification for expiry alert: {}", ingredientName);
+            for (String userId : userIds) {
+                notificationService.createNotification(
+                    userId,
+                    "INVENTORY_ALERT",
+                    title,
+                    notificationMessage,
+                    severity != null ? severity : "HIGH",
+                    metadataJson
+                );
+            }
+            
+            log.info("Created notification for expiry alert: {} to {} users", ingredientName, userIds.size());
             
         } catch (Exception e) {
             log.error("Error processing ExpiryAlertEvent: {}", e.getMessage(), e);

@@ -9,7 +9,12 @@ export function hasRole(userRole, requiredRoles) {
 
 // Check if user can manage menu (create/edit/delete)
 export function canManageMenu(role) {
-  return hasRole(role, ["STAFF", "RESTAURANT_MANAGER", "ADMIN"]);
+  return hasRole(role, [
+    "STAFF",
+    "KITCHEN_STAFF",
+    "RESTAURANT_MANAGER",
+    "ADMIN",
+  ]);
 }
 
 // Check if user can manage inventory
@@ -34,6 +39,8 @@ export function getRedirectPathByRole(role) {
       return "/dashboard/menu"; // Customer goes to menu view
     case "STAFF":
       return "/dashboard/menu"; // Staff goes to menu management
+    case "KITCHEN_STAFF":
+      return "/dashboard/orders"; // Kitchen staff goes to orders
     case "WAREHOUSE_STAFF":
       return "/dashboard/inventory"; // Warehouse staff goes to inventory
     case "RESTAURANT_MANAGER":
@@ -57,13 +64,25 @@ export function getMenuItemsByRole(role) {
       icon: "menu",
       key: "menu",
       label: "Thực đơn",
-      roles: ["CUSTOMER", "STAFF", "RESTAURANT_MANAGER", "ADMIN"],
+      roles: [
+        "CUSTOMER",
+        "STAFF",
+        "KITCHEN_STAFF",
+        "RESTAURANT_MANAGER",
+        "ADMIN",
+      ],
     },
     {
       icon: "shopping",
       key: "orders",
       label: "Đơn hàng",
-      roles: ["CUSTOMER", "STAFF", "RESTAURANT_MANAGER", "ADMIN"],
+      roles: [
+        "CUSTOMER",
+        "STAFF",
+        "KITCHEN_STAFF",
+        "RESTAURANT_MANAGER",
+        "ADMIN",
+      ],
     },
   ];
 

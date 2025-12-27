@@ -109,5 +109,70 @@ public class OrderEventPublisher {
                 orderId, ingredientId, e.getMessage());
         }
     }
+    
+    /**
+     * Publishes order created event for notifications
+     */
+    public void publishOrderCreated(Order order) {
+        try {
+            Map<String, Object> orderCreatedEvent = new HashMap<>();
+            orderCreatedEvent.put("orderId", order.getOrderId());
+            orderCreatedEvent.put("customerId", order.getCustomerId());
+            orderCreatedEvent.put("customerName", order.getCustomerName());
+            orderCreatedEvent.put("totalAmount", order.getTotalAmount());
+            orderCreatedEvent.put("orderType", order.getOrderType() != null ? order.getOrderType().name() : OrderConstants.TYPE_UNKNOWN);
+            orderCreatedEvent.put("orderStatus", order.getOrderStatus() != null ? order.getOrderStatus().name() : "PENDING");
+            orderCreatedEvent.put("createdAt", order.getOrderDate() != null ? order.getOrderDate().toString() : "");
+            orderCreatedEvent.put("timestamp", System.currentTimeMillis());
+            
+            kafkaService.sendMessage(OrderConstants.TOPIC_ORDER_CREATED, orderCreatedEvent);
+            log.info("Order created event sent via Kafka for order {}", order.getOrderId());
+        } catch (Exception e) {
+            log.error("Failed to send order-created event for order {}: {}", order.getOrderId(), e.getMessage());
+        }
+    }
+    
+    /**
+     * Publishes order status updated event for notifications
+     */
+    public void publishOrderStatusUpdated(Order order, String previousStatus, String newStatus, String updatedBy) {
+        try {
+            Map<String, Object> statusUpdatedEvent = new HashMap<>();
+            statusUpdatedEvent.put("orderId", order.getOrderId());
+            statusUpdatedEvent.put("customerId", order.getCustomerId());
+            statusUpdatedEvent.put("previousStatus", previousStatus);
+            statusUpdatedEvent.put("newStatus", newStatus);
+            statusUpdatedEvent.put("updatedBy", updatedBy);
+            statusUpdatedEvent.put("orderType", order.getOrderType() != null ? order.getOrderType().name() : OrderConstants.TYPE_UNKNOWN);
+            statusUpdatedEvent.put("totalAmount", order.getTotalAmount());
+            statusUpdatedEvent.put("timestamp", System.currentTimeMillis());
+            
+            kafkaService.sendMessage(OrderConstants.TOPIC_ORDER_STATUS_UPDATED, statusUpdatedEvent);
+            log.info("Order status updated event sent via Kafka for order {}: {} -> {}", 
+                order.getOrderId(), previousStatus, newStatus);
+        } catch (Exception e) {
+            log.error("Failed to send order-status-updated event for order {}: {}", order.getOrderId(), e.getMessage());
+        }
+    }
+    
+    /**
+     * Publishes order cancelled event for notifications
+     */
+    public void publishOrderCancelled(Order order, String cancellationReason) {
+        try {
+            Map<String, Object> orderCancelledEvent = new HashMap<>();
+            orderCancelledEvent.put("orderId", order.getOrderId());
+            orderCancelledEvent.put("customerId", order.getCustomerId());
+            orderCancelledEvent.put("cancellationReason", cancellationReason);
+            orderCancelledEvent.put("totalAmount", order.getTotalAmount());
+            orderCancelledEvent.put("orderType", order.getOrderType() != null ? order.getOrderType().name() : OrderConstants.TYPE_UNKNOWN);
+            orderCancelledEvent.put("timestamp", System.currentTimeMillis());
+            
+            kafkaService.sendMessage(OrderConstants.TOPIC_ORDER_CANCELLED, orderCancelledEvent);
+            log.info("Order cancelled event sent via Kafka for order {}", order.getOrderId());
+        } catch (Exception e) {
+            log.error("Failed to send order-cancelled event for order {}: {}", order.getOrderId(), e.getMessage());
+        }
+    }
 }
 

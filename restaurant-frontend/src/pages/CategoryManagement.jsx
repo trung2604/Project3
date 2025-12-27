@@ -31,6 +31,7 @@ import {
 } from '@ant-design/icons';
 import apiService from '../services/apiService';
 import { PAGINATION, STATUS } from '../constants.js';
+import { dispatchDataRefresh, DATA_REFRESH_EVENTS } from '../utils/dataRefreshEvents';
 
 const { Option } = Select;
 const { Search } = Input;
@@ -104,9 +105,11 @@ const CategoryManagement = () => {
             if (modalType === 'create') {
                 await apiService.menu.createCategory(values);
                 message.success('Tạo danh mục thành công');
+                dispatchDataRefresh(DATA_REFRESH_EVENTS.CATEGORY_CREATED, values);
             } else if (modalType === 'edit') {
                 await apiService.menu.updateCategory(selectedCategory.categoryId || selectedCategory.id, values);
                 message.success('Cập nhật danh mục thành công');
+                dispatchDataRefresh(DATA_REFRESH_EVENTS.CATEGORY_UPDATED, { ...values, categoryId: selectedCategory.categoryId || selectedCategory.id });
             }
 
             setModalVisible(false);
@@ -121,6 +124,7 @@ const CategoryManagement = () => {
         try {
             await apiService.menu.deleteCategory(id);
             message.success('Xóa danh mục thành công');
+            dispatchDataRefresh(DATA_REFRESH_EVENTS.CATEGORY_DELETED, { categoryId: id });
             loadCategories();
         } catch (error) {
             message.error('Lỗi khi xóa danh mục');

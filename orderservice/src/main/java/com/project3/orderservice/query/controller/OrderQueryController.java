@@ -70,27 +70,44 @@ public class OrderQueryController {
                 log.warn("User not found in cache/service for userId: {}, assuming customer role", currentUserId);
             }
             
-            // For non-staff users, restrict to their own orders
+            if (customerId != null && customerId.trim().isEmpty()) {
+                customerId = null;
+            }
+            
             if (!isStaffOrAbove) {
-                if (customerId == null) {
+                if (customerId == null || customerId.trim().isEmpty()) {
                     customerId = currentUserId;
+                    log.debug("Auto-setting customerId to currentUserId: {}", currentUserId);
                 } else if (!customerId.equals(currentUserId)) {
-                    log.warn("Non-staff user {} attempted to view orders for customer {}", currentUserId, customerId);
+                    log.warn("Non-staff user {} attempted to view orders for customer {} (mismatch)", currentUserId, customerId);
                     return ResponseEntity.status(HttpStatus.FORBIDDEN)
                             .body(ApiResponseDTO.error("You can only view your own orders", 403));
+                } else {
+                    log.debug("Customer {} viewing their own orders", currentUserId);
                 }
+            } else {
+                log.debug("Staff user {} can view all orders, customerId filter: {}", currentUserId, customerId);
             }
             
             GetAllOrderQuery query = new GetAllOrderQuery(status, type, customerId, startDate, endDate);
+            log.info("Querying orders with params: status={}, type={}, customerId={}, startDate={}, endDate={}, isStaffOrAbove={}", 
+                    status, type, customerId, startDate, endDate, isStaffOrAbove);
             List<OrderResponse> orders = queryGateway.query(query, ResponseTypes.multipleInstancesOf(OrderResponse.class)).join();
+            if (orders == null) {
+                orders = new java.util.ArrayList<>();
+            }
+            log.info("Query returned {} orders", orders.size());
             
             // Additional filtering for non-staff users
             if (!isStaffOrAbove) {
+                int beforeFilter = orders.size();
                 orders = orders.stream()
                         .filter(order -> order.getCustomerId() != null && order.getCustomerId().equals(currentUserId))
                         .collect(Collectors.toList());
+                log.info("Filtered orders for customer {}: {} -> {}", currentUserId, beforeFilter, orders.size());
             }
             
+            log.info("Returning {} orders to user {}", orders.size(), currentUserId);
             return ResponseEntity.ok(ApiResponseDTO.success(orders, "Orders retrieved successfully"));
         } catch (org.springframework.web.server.ResponseStatusException e) {
             log.error("ResponseStatusException in getAllOrder: {}", e.getMessage());

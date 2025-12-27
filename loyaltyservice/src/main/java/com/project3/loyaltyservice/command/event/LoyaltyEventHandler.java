@@ -6,6 +6,7 @@ import com.project3.loyaltyservice.command.enums.VoucherUsageStatus;
 import com.project3.loyaltyservice.command.events.LoyaltyAccountCreatedEvent;
 import com.project3.loyaltyservice.command.events.PointsEarnedEvent;
 import com.project3.loyaltyservice.command.events.VoucherRedeemedEvent;
+import com.project3.loyaltyservice.command.service.LoyaltyEventPublisher;
 import lombok.extern.slf4j.Slf4j;
 import org.axonframework.eventhandling.EventHandler;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +26,9 @@ public class LoyaltyEventHandler {
     
     @Autowired
     private VoucherUsageRepository voucherUsageRepository;
+    
+    @Autowired
+    private LoyaltyEventPublisher eventPublisher;
     
     @EventHandler
     public void on(LoyaltyAccountCreatedEvent event) {
@@ -68,6 +72,11 @@ public class LoyaltyEventHandler {
         
         pointsTransactionRepository.save(transaction);
         log.info("Points transaction saved: {}", transaction.getTransactionId());
+        
+        // Publish event to Kafka for notification service (only for positive points - earned)
+        if (event.getPoints() > 0) {
+            eventPublisher.publishPointsEarned(event);
+        }
     }
     
     @EventHandler
@@ -87,6 +96,9 @@ public class LoyaltyEventHandler {
         
         voucherUsageRepository.save(usage);
         log.info("Voucher usage saved: {}", usage.getUsageId());
+        
+        // Publish event to Kafka for notification service
+        eventPublisher.publishVoucherRedeemed(event);
     }
 }
 

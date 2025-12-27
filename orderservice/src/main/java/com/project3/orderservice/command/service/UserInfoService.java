@@ -20,7 +20,7 @@ public class UserInfoService extends BaseHttpClientService {
     @Autowired
     private KafkaService kafkaService;
     
-    @Value("${services.user-service.url:http://user-service:8080}")
+    @Value("${services.user-service.url:http://userservice:8005}")
     private String userServiceUrl;
     
     public UserInfo getUserInfo(String userId) {
@@ -34,7 +34,12 @@ public class UserInfoService extends BaseHttpClientService {
             return cached;
         }
         
-        UserInfo userInfo = fetchUserInfoFromService(userId);
+        // Try using Eureka service discovery first (if RestTemplate is @LoadBalanced)
+        UserInfo userInfo = fetchUserInfoFromServiceWithDiscovery(userId);
+        if (userInfo == null) {
+            // Fallback to direct URL
+            userInfo = fetchUserInfoFromService(userId);
+        }
         if (userInfo != null) {
             userInfoCache.put(userId, userInfo);
             
@@ -51,8 +56,32 @@ public class UserInfoService extends BaseHttpClientService {
         return userInfo;
     }
     
+    /**
+     * Try to fetch user info using Eureka service discovery (if RestTemplate is @LoadBalanced)
+     */
+    private UserInfo fetchUserInfoFromServiceWithDiscovery(String userId) {
+        try {
+            // Use service name for Eureka discovery (if RestTemplate is @LoadBalanced)
+            String url = "http://userservice/api/users/" + userId;
+            log.debug("Trying to fetch user info via Eureka service discovery: {}", url);
+            Map<String, Object> responseBody = fetchFromService(url);
+            Map<String, Object> data = extractData(responseBody);
+            
+            if (data != null) {
+                return mapToUserInfo(data);
+            }
+        } catch (Exception e) {
+            log.debug("Eureka service discovery failed, will try direct URL: {}", e.getMessage());
+        }
+        return null;
+    }
+    
+    /**
+     * Fallback: fetch user info using direct URL
+     */
     private UserInfo fetchUserInfoFromService(String userId) {
         String url = userServiceUrl + "/api/users/" + userId;
+        log.debug("Fetching user info from direct URL: {}", url);
         Map<String, Object> responseBody = fetchFromService(url);
         Map<String, Object> data = extractData(responseBody);
         
@@ -60,6 +89,10 @@ public class UserInfoService extends BaseHttpClientService {
             return null;
         }
         
+        return mapToUserInfo(data);
+    }
+    
+    private UserInfo mapToUserInfo(Map<String, Object> data) {
         UserInfo userInfo = new UserInfo();
         userInfo.setUserId(getStringValue(data, "userId"));
         userInfo.setUsername(getStringValue(data, "username"));
@@ -102,6 +135,6 @@ public class UserInfoService extends BaseHttpClientService {
     }
     
     public boolean isStaffOrAbove(UserInfo userInfo) {
-        return hasRole(userInfo, "STAFF", "WAREHOUSE_STAFF", "RESTAURANT_MANAGER", "ADMIN");
+        return hasRole(userInfo, "STAFF", "KITCHEN_STAFF", "WAREHOUSE_STAFF", "RESTAURANT_MANAGER", "ADMIN");
     }
 }

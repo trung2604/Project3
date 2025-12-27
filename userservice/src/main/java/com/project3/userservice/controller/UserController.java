@@ -268,6 +268,18 @@ public class UserController extends BaseUserController {
             return badRequest(e.getMessage() != null ? e.getMessage() : "Failed to get client roles", httpRequest);
         }
     }
+    
+    @PostMapping("/{userId}/sync-role")
+    public ResponseEntity<ApiResponseDTO<UserResponseDTO>> syncUserRole(
+            @PathVariable String userId,
+            HttpServletRequest httpRequest) {
+        try {
+            UserResponseDTO user = userService.syncUserRole(userId);
+            return ResponseEntity.ok(ApiResponseDTO.success(user, "User role synced to Keycloak successfully. Please logout and login again to get a new JWT token with the correct role."));
+        } catch (RuntimeException e) {
+            return badRequest(e.getMessage() != null ? e.getMessage() : "Failed to sync user role", httpRequest);
+        }
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponseDTO<Map<String, String>>> handleValidationExceptions(

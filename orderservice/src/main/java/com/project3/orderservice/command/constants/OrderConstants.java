@@ -14,6 +14,9 @@ public final class OrderConstants {
     public static final String TOPIC_DELIVERY_REQUEST = "delivery-request";
     public static final String TOPIC_INVENTORY_DEDUCTION_REQUEST = "inventory-deduction-request";
     public static final String TOPIC_ORDER_COMPLETED = "order-completed";
+    public static final String TOPIC_ORDER_CREATED = "order-created";
+    public static final String TOPIC_ORDER_STATUS_UPDATED = "order-status-updated";
+    public static final String TOPIC_ORDER_CANCELLED = "order-cancelled";
     
     // Default values
     public static final String DEFAULT_UNIT = "kg";

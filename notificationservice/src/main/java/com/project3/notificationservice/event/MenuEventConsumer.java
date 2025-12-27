@@ -1,6 +1,7 @@
 package com.project3.notificationservice.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.project3.notificationservice.client.UserServiceClient;
 import com.project3.notificationservice.service.NotificationService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,6 +13,7 @@ import org.springframework.retry.annotation.Backoff;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -23,6 +25,9 @@ public class MenuEventConsumer {
     
     @Autowired
     private ObjectMapper objectMapper;
+    
+    @Autowired
+    private UserServiceClient userServiceClient;
     
     @RetryableTopic(
         attempts = "4",
@@ -53,17 +58,22 @@ public class MenuEventConsumer {
                 "Nguyên liệu %s đã hết hàng. Một số món ăn có thể đã được tự động tắt.", 
                 ingredientName);
             
-            // Create notification for menu manager/admin
-            notificationService.createNotification(
-                "admin",
-                "MENU_ALERT",
-                title,
-                notificationMessage,
-                "CRITICAL",
-                metadataJson
-            );
+            // Notify managers and admins
+            List<String> userIds = userServiceClient.getUserIdsByRoles(
+                "RESTAURANT_MANAGER", "ADMIN");
             
-            log.info("Created notification for inventory out of stock: {}", ingredientName);
+            for (String userId : userIds) {
+                notificationService.createNotification(
+                    userId,
+                    "MENU_ALERT",
+                    title,
+                    notificationMessage,
+                    "CRITICAL",
+                    metadataJson
+                );
+            }
+            
+            log.info("Created notification for inventory out of stock: {} to {} users", ingredientName, userIds.size());
             
         } catch (Exception e) {
             log.error("Error processing InventoryOutOfStockEvent: {}", e.getMessage(), e);
@@ -109,17 +119,22 @@ public class MenuEventConsumer {
                 "Nguyên liệu %s đã được nhập lại. Tồn kho hiện tại: %.2f", 
                 ingredientName, currentStock != null ? currentStock : 0);
             
-            // Create notification for menu manager (optional, lower priority)
-            notificationService.createNotification(
-                "admin",
-                "MENU_INFO",
-                title,
-                notificationMessage,
-                "LOW",
-                metadataJson
-            );
+            // Notify managers and admins (optional, lower priority)
+            List<String> userIds = userServiceClient.getUserIdsByRoles(
+                "RESTAURANT_MANAGER", "ADMIN");
             
-            log.info("Created notification for inventory restocked: {}", ingredientName);
+            for (String userId : userIds) {
+                notificationService.createNotification(
+                    userId,
+                    "MENU_INFO",
+                    title,
+                    notificationMessage,
+                    "LOW",
+                    metadataJson
+                );
+            }
+            
+            log.info("Created notification for inventory restocked: {} to {} users", ingredientName, userIds.size());
             
         } catch (Exception e) {
             log.error("Error processing InventoryRestockedEvent: {}", e.getMessage(), e);

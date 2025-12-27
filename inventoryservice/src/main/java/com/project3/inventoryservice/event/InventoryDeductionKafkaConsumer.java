@@ -32,7 +32,9 @@ public class InventoryDeductionKafkaConsumer {
             
             StockOutCommand command = new StockOutCommand();
             command.setIngredientId(event.getIngredientId());
-            command.setQuantity(event.getQuantity() != null ? event.getQuantity().doubleValue() : 0.0);
+            // Use quantityDouble if available (for precise quantities), otherwise fallback to quantity
+            Double quantity = event.getQuantityAsDouble();
+            command.setQuantity(quantity != null ? quantity : 0.0);
             command.setUnit(event.getUnit() != null ? event.getUnit() : "kg");
             command.setTransactionId(IdGenerator.generateStockOutId());
             command.setTransactionDate(LocalDateTime.now());

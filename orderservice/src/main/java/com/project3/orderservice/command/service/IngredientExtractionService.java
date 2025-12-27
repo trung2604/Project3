@@ -27,18 +27,26 @@ public class IngredientExtractionService {
     /**
      * Extracts ingredient quantities from an order
      * @param orderId The order ID
-     * @return Map of ingredient ID to total quantity needed
+     * @return Map of ingredient ID to total quantity needed (in Double for precise calculations)
      */
-    public Map<String, Integer> extractIngredientQuantities(String orderId) {
-        Map<String, Integer> ingredientQuantities = new HashMap<>();
+    public Map<String, Double> extractIngredientQuantities(String orderId) {
+        Map<String, Double> ingredientQuantities = new HashMap<>();
         
         List<OrderItem> orderItems = orderItemRepository.findByOrderId(orderId);
         for (OrderItem orderItem : orderItems) {
-            List<String> ingredients = menuServiceClient.getMenuItemIngredients(orderItem.getMenuItemId());
-            int quantity = orderItem.getQuantity();
+            // Get ingredients with quantities per serving
+            Map<String, Double> ingredientsWithQuantity = 
+                menuServiceClient.getMenuItemIngredientsWithQuantity(orderItem.getMenuItemId());
             
-            for (String ingredientId : ingredients) {
-                ingredientQuantities.merge(ingredientId, quantity, Integer::sum);
+            int orderQuantity = orderItem.getQuantity(); // Number of servings ordered
+            
+            // Calculate total quantity needed for each ingredient
+            for (Map.Entry<String, Double> entry : ingredientsWithQuantity.entrySet()) {
+                String ingredientId = entry.getKey();
+                Double quantityPerServing = entry.getValue(); // e.g., 0.2 kg per serving
+                Double totalQuantity = quantityPerServing * orderQuantity; // e.g., 0.2 * 3 = 0.6 kg
+                
+                ingredientQuantities.merge(ingredientId, totalQuantity, Double::sum);
             }
         }
         

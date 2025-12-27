@@ -76,7 +76,6 @@ const LoyaltyManagement = () => {
         }
       } catch (error) {
         // Voucher usage might not be available, ignore
-        console.log("Voucher usage history not available");
       }
     } catch (error) {
       console.error("Error loading loyalty data:", error);

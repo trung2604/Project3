@@ -200,6 +200,13 @@ const menuAPI = {
     );
   },
 
+  async updateMenuItemIngredientsWithQuantity(id, ingredientsWithQuantity) {
+    return await apiClient.patch(
+      `${API_ENDPOINTS.MENU.ITEMS}/${id}/ingredients-with-quantity`,
+      ingredientsWithQuantity
+    );
+  },
+
   async updateMenuItemPrice(id, price) {
     return await apiClient.patch(`${API_ENDPOINTS.MENU.ITEMS}/${id}/price`, {
       price,

@@ -140,6 +140,60 @@ public class MenuCommandController extends BaseMenuController {
         }
     }
     
+    /**
+     * New endpoint: Attach ingredients with quantities
+     * Accepts list of AttachIngredientsWithQuantityDTO
+     */
+    @PatchMapping("/items/{id}/ingredients-with-quantity")
+    @Operation(summary = "Gắn nguyên liệu với số lượng", description = "Gắn nguyên liệu vào món ăn với số lượng cụ thể cho mỗi nguyên liệu")
+    public ResponseEntity<ApiResponseDTO<String>> attachIngredientsWithQuantity(
+            @PathVariable("id") String id, 
+            @RequestBody List<com.project3.menuservice.command.dto.AttachIngredientsWithQuantityDTO> ingredientsWithQuantity) {
+        try {
+            MenuItem menuItem = menuItemRepository.findById(id).orElse(null);
+            if (menuItem == null) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiResponseDTO.error("Menu item not found: " + id, 404));
+            }
+            
+            // Clear existing menu item ingredients
+            if (menuItem.getMenuItemIngredients() != null) {
+                menuItem.getMenuItemIngredients().clear();
+            }
+            
+            // Also clear legacy ingredients list for consistency
+            if (menuItem.getIngredients() != null) {
+                menuItem.getIngredients().clear();
+            }
+            
+            // Add new ingredients with quantities
+            if (ingredientsWithQuantity != null && !ingredientsWithQuantity.isEmpty()) {
+                for (com.project3.menuservice.command.dto.AttachIngredientsWithQuantityDTO dto : ingredientsWithQuantity) {
+                    if (dto.getIngredientId() != null && dto.getQuantity() != null && dto.getQuantity() > 0) {
+                        // Add to new format (with quantities)
+                        com.project3.menuservice.command.entity.MenuItemIngredient menuItemIngredient = 
+                            new com.project3.menuservice.command.entity.MenuItemIngredient();
+                        menuItemIngredient.setMenuItem(menuItem); // Set the relationship
+                        menuItemIngredient.setIngredientId(dto.getIngredientId());
+                        menuItemIngredient.setQuantity(dto.getQuantity());
+                        menuItemIngredient.setUnit(dto.getUnit() != null && !dto.getUnit().trim().isEmpty() ? dto.getUnit() : "kg");
+                        menuItemIngredient.setNotes(dto.getNotes());
+                        menuItem.getMenuItemIngredients().add(menuItemIngredient);
+                        
+                        // Also add to legacy list for backward compatibility
+                        menuItem.addIngredient(dto.getIngredientId());
+                    }
+                }
+            }
+            
+            menuItemRepository.save(menuItem);
+            return ResponseEntity.ok(ApiResponseDTO.success(id, "Ingredients with quantities attached successfully"));
+        } catch (Exception e) {
+            log.error("Error attaching ingredients with quantity to menu item {}: {}", id, e.getMessage(), e);
+            return badRequest("Failed to attach ingredients: " + e.getMessage());
+        }
+    }
+    
     @PatchMapping("/items/{id}/ingredients")
     public ResponseEntity<ApiResponseDTO<String>> attachIngredients(@PathVariable("id") String id, @RequestBody List<String> ingredients) {
         try {

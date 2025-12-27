@@ -34,9 +34,14 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, String> {
                                  @Param("search") String search,
                                  Pageable pageable);
 
-    @EntityGraph(attributePaths = {"category", "ingredients"})
+    // Fetch category only, menuItemIngredients will be loaded separately to avoid SQL join issues
+    @EntityGraph(attributePaths = {"category"})
     @Query("SELECT m FROM MenuItem m WHERE m.menuItemId = :menuItemId")
     Optional<MenuItem> findWithDetailsById(@Param("menuItemId") String menuItemId);
+    
+    // Alternative: fetch only legacy ingredients (for backward compatibility)
+    @EntityGraph(attributePaths = {"category", "ingredients"})
+    @Query("SELECT m FROM MenuItem m WHERE m.menuItemId = :menuItemId")
+    Optional<MenuItem> findWithLegacyIngredientsById(@Param("menuItemId") String menuItemId);
 }
-
 

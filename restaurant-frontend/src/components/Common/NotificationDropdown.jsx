@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import notificationAPI from "../../services/notificationService";
 import { useAuth } from "../../context/AuthContext";
 import { useWebSocketNotifications } from "../../hooks/useWebSocketNotifications";
+import NotificationDetailModal from "./NotificationDetailModal";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/vi";
@@ -19,6 +20,8 @@ const NotificationDropdown = () => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [dropdownVisible, setDropdownVisible] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   const userId = user?.userId || user?.id || "admin"; // Fallback to 'admin' for now
 
@@ -62,47 +65,37 @@ const NotificationDropdown = () => {
   const loadNotifications = async () => {
     setLoading(true);
     try {
-      const data = await notificationAPI.getUnreadNotifications(userId, {
+      const data = await notificationAPI.getNotifications({
+        userId: userId,
         page: 0,
         size: 10,
       });
-      console.log("Notifications API response (raw):", JSON.stringify(data, null, 2)); // Debug
-      console.log("Notifications API response type:", typeof data); // Debug
-      console.log("Notifications API response keys:", data ? Object.keys(data) : "null"); // Debug
-      
-      // Backend returns ApiResponseDTO<PagedNotificationResponse>
-      // Interceptor extracts .data, so data is PagedNotificationResponse
-      // PagedNotificationResponse has structure: { notifications: [...], page: 0, size: 10, ... }
+
       let notificationsList = [];
-      
+
       if (data) {
         if (data.notifications && Array.isArray(data.notifications)) {
           notificationsList = data.notifications;
-          console.log("Found notifications in data.notifications:", notificationsList.length); // Debug
         } else if (data.content && Array.isArray(data.content)) {
-          // Alternative paginated response format
           notificationsList = data.content;
-          console.log("Found notifications in data.content:", notificationsList.length); // Debug
         } else if (Array.isArray(data)) {
-          // Direct array response
           notificationsList = data;
-          console.log("Found notifications as direct array:", notificationsList.length); // Debug
-        } else {
-          console.warn("Unexpected response format:", data); // Debug
+        } else if (data.items && Array.isArray(data.items)) {
+          notificationsList = data.items;
+        } else if (data && typeof data === "object") {
+          const keys = Object.keys(data);
+          for (const key of keys) {
+            if (Array.isArray(data[key])) {
+              notificationsList = data[key];
+              break;
+            }
+          }
         }
       }
-      
-      console.log("Final notifications list length:", notificationsList.length); // Debug
-      console.log("Final notifications list:", notificationsList); // Debug
+
       setNotifications(notificationsList);
     } catch (error) {
       console.error("Error loading notifications:", error);
-      console.error("Error details:", {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data,
-      }); // Debug
-      // Show error message if it's not a 401/403
       if (error.response?.status !== 401 && error.response?.status !== 403) {
         console.warn("Failed to load notifications:", error.message);
       }
@@ -114,8 +107,6 @@ const NotificationDropdown = () => {
   const loadUnreadCount = async () => {
     try {
       const data = await notificationAPI.getUnreadCount(userId);
-      console.log("Unread count API response:", data); // Debug
-      // Backend returns ApiResponseDTO<Map<String, Object>> with unreadCount key
       let count = 0;
       if (data?.unreadCount !== undefined) {
         count = data.unreadCount;
@@ -124,11 +115,9 @@ const NotificationDropdown = () => {
       } else if (data?.count !== undefined) {
         count = data.count;
       }
-      console.log("Unread count:", count); // Debug
       setUnreadCount(count);
     } catch (error) {
       console.error("Error loading unread count:", error);
-      // Don't show error - just set to 0
       setUnreadCount(0);
     }
   };
@@ -151,7 +140,9 @@ const NotificationDropdown = () => {
   };
 
   const handleArchive = async (notificationId, e) => {
-    e.stopPropagation();
+    if (e) {
+      e.stopPropagation();
+    }
     try {
       await notificationAPI.archive(notificationId);
       setNotifications((prev) =>
@@ -222,11 +213,12 @@ const NotificationDropdown = () => {
                     backgroundColor:
                       notification.status === "UNREAD" ? "#f0f9ff" : "white",
                   }}
-                  onClick={() =>
-                    handleMarkAsRead(notification.notificationId, {
-                      stopPropagation: () => {},
-                    })
-                  }
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedNotification(notification);
+                    setModalVisible(true);
+                    setDropdownVisible(false);
+                  }}
                 >
                   <List.Item.Meta
                     title={
@@ -277,18 +269,19 @@ const NotificationDropdown = () => {
                           }}
                         >
                           <span>{dayjs(notification.createdAt).fromNow()}</span>
-                          <div>
+                          <div onClick={(e) => e.stopPropagation()}>
                             {notification.status === "UNREAD" && (
                               <Button
                                 type="text"
                                 size="small"
                                 icon={<CheckOutlined />}
-                                onClick={(e) =>
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   handleMarkAsRead(
                                     notification.notificationId,
                                     e
-                                  )
-                                }
+                                  );
+                                }}
                                 style={{ marginRight: "4px" }}
                               />
                             )}
@@ -296,9 +289,10 @@ const NotificationDropdown = () => {
                               type="text"
                               size="small"
                               icon={<DeleteOutlined />}
-                              onClick={(e) =>
-                                handleArchive(notification.notificationId, e)
-                              }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleArchive(notification.notificationId, e);
+                              }}
                               danger
                             />
                           </div>
@@ -335,31 +329,56 @@ const NotificationDropdown = () => {
   ];
 
   return (
-    <Dropdown
-      menu={{ items: notificationItems }}
-      trigger={["click"]}
-      placement="bottomRight"
-      open={dropdownVisible}
-      onOpenChange={(visible) => {
-        setDropdownVisible(visible);
-        if (visible) {
-          loadNotifications();
-        }
-      }}
-    >
-      <Badge count={unreadCount} size="small" offset={[-5, 5]}>
-        <BellOutlined
-          className="notification-icon"
-          style={{
-            fontSize: "20px",
-            color: "#595959",
-            cursor: "pointer",
-            padding: "8px",
-            display: "block",
-          }}
-        />
-      </Badge>
-    </Dropdown>
+    <>
+      <Dropdown
+        menu={{ items: notificationItems }}
+        trigger={["click"]}
+        placement="bottomRight"
+        open={dropdownVisible}
+        onOpenChange={(visible) => {
+          setDropdownVisible(visible);
+          if (visible) {
+            loadNotifications();
+          }
+        }}
+      >
+        <Badge count={unreadCount} size="small" offset={[-5, 5]}>
+          <BellOutlined
+            className="notification-icon"
+            style={{
+              fontSize: "20px",
+              color: "#595959",
+              cursor: "pointer",
+              padding: "8px",
+              display: "block",
+            }}
+          />
+        </Badge>
+      </Dropdown>
+      <NotificationDetailModal
+        notification={selectedNotification}
+        visible={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setSelectedNotification(null);
+        }}
+        onMarkAsRead={(notificationId) => {
+          handleMarkAsRead(notificationId);
+        }}
+        onArchive={(notificationId) => {
+          handleArchive(notificationId);
+        }}
+        onUpdate={(updatedNotification) => {
+          setNotifications((prev) =>
+            prev.map((n) =>
+              n.notificationId === updatedNotification.notificationId
+                ? updatedNotification
+                : n
+            )
+          );
+        }}
+      />
+    </>
   );
 };
 

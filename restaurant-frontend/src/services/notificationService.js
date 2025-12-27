@@ -4,7 +4,6 @@ import { API_ENDPOINTS } from "../constants.js";
 const NOTIFICATIONS_BASE = "/api/notifications";
 
 const notificationAPI = {
-  // Get all notifications with filters
   async getNotifications(params = {}) {
     const cleanedParams = Object.fromEntries(
       Object.entries(params).filter(
@@ -14,70 +13,56 @@ const notificationAPI = {
     const res = await apiClient.get(NOTIFICATIONS_BASE, {
       params: cleanedParams,
     });
-    return res.data?.data || res.data;
+    return res;
   },
 
-  // Get notification by ID
   async getNotificationById(id) {
     const res = await apiClient.get(`${NOTIFICATIONS_BASE}/${id}`);
-    return res.data?.data || res.data;
+    return res;
   },
 
-  // Get unread notifications
   async getUnreadNotifications(userId, params = {}) {
     const res = await apiClient.get(`${NOTIFICATIONS_BASE}/unread`, {
       params: { userId, ...params },
     });
-    // Interceptor already extracts .data from ApiResponseDTO
-    // So res is already PagedNotificationResponse: { notifications: [...], page: 0, size: 10, ... }
-    console.log("getUnreadNotifications - res:", res); // Debug
-    // res is already the PagedNotificationResponse, not a response object
     return res;
   },
 
-  // Get unread count
   async getUnreadCount(userId) {
     const res = await apiClient.get(`${NOTIFICATIONS_BASE}/unread/count`, {
       params: { userId },
     });
-    // Interceptor already extracts .data from ApiResponseDTO
-    // So res is already Map<String, Object>: { userId: "...", unreadCount: 123 }
-    console.log("getUnreadCount - res:", res); // Debug
     return res;
   },
 
-  // Mark notification as read
   async markAsRead(notificationId) {
     const res = await apiClient.patch(
       `${NOTIFICATIONS_BASE}/${notificationId}/read`
     );
-    return res.data?.data || res.data;
+    return res;
   },
 
-  // Archive notification
   async archive(notificationId) {
     const res = await apiClient.patch(
       `${NOTIFICATIONS_BASE}/${notificationId}/archive`
     );
-    return res.data?.data || res.data;
+    return res;
   },
 
-  // Bulk mark as read
   async bulkMarkAsRead(notificationIds) {
     const res = await apiClient.post(
       `${NOTIFICATIONS_BASE}/bulk-read`,
       notificationIds
     );
-    return res.data?.data || res.data;
+    return res;
   },
 
-  // Bulk archive
   async bulkArchive(notificationIds) {
     const res = await apiClient.post(
       `${NOTIFICATIONS_BASE}/bulk-archive`,
       notificationIds
     );
-    return res.data?.data || res.data;
+    return res;
   },
 };
 

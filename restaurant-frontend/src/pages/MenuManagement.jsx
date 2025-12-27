@@ -91,6 +91,7 @@ const MenuManagement = () => {
   const [form] = Form.useForm();
   const [uploading, setUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
+  const [formInitialValues, setFormInitialValues] = useState({});
 
   // Load menu items data
   const loadMenuItems = async (
@@ -115,7 +116,9 @@ const MenuManagement = () => {
 
       const response = await apiService.menu.getMenuItems(params);
       // Response interceptor đã extract data, response là PagedMenuItemResponse trực tiếp
-      setMenuItems(response?.items || []);
+      const items = response?.items || [];
+
+      setMenuItems(items);
       setPagination((prev) => ({
         ...prev,
         current: page,
@@ -208,6 +211,83 @@ const MenuManagement = () => {
     };
   }, []);
 
+  // Listen to menu item changes to reload menu items
+  useEffect(() => {
+    const eventNames = [
+      DATA_REFRESH_EVENTS.MENU_ITEM_CREATED,
+      DATA_REFRESH_EVENTS.MENU_ITEM_UPDATED,
+      DATA_REFRESH_EVENTS.MENU_ITEM_DELETED,
+    ];
+    const cleanupFunctions = [];
+
+    eventNames.forEach((eventName) => {
+      const cleanup = listenToDataRefresh(eventName, () => {
+        loadMenuItems(pagination.current, pagination.pageSize);
+      });
+      cleanupFunctions.push(cleanup);
+    });
+
+    return () => {
+      cleanupFunctions.forEach((cleanup) => cleanup());
+    };
+  }, [pagination.current, pagination.pageSize]);
+
+  // Set form initial values for ingredients modal when modal opens and selectedMenuItem changes
+  useEffect(() => {
+    if (modalVisible && modalType === "ingredients" && selectedMenuItem) {
+      let ingredientsData = [];
+
+      // Prioritize ingredientDetails (new format with quantities)
+      if (
+        selectedMenuItem.ingredientDetails &&
+        selectedMenuItem.ingredientDetails.length > 0
+      ) {
+        ingredientsData = selectedMenuItem.ingredientDetails.map((detail) => ({
+          ingredientId: detail.ingredientId,
+          quantity: detail.quantity || 0,
+          unit: detail.unit || "kg",
+          notes: detail.notes || "",
+        }));
+      } else if (
+        selectedMenuItem.ingredients &&
+        selectedMenuItem.ingredients.length > 0
+      ) {
+        // Legacy format: convert to new format with default quantity 1
+        ingredientsData = selectedMenuItem.ingredients.map((ingredientId) => ({
+          ingredientId: ingredientId,
+          quantity: 1,
+          unit: "kg",
+          notes: "",
+        }));
+      }
+
+      setFormInitialValues({
+        ingredients: ingredientsData,
+      });
+
+      const timer = setTimeout(() => {
+        if (modalVisible && modalType === "ingredients") {
+          try {
+            form.setFieldsValue({
+              ingredients: ingredientsData,
+            });
+          } catch (error) {
+            // Form might not be ready yet
+          }
+        }
+      }, 100);
+
+      return () => clearTimeout(timer);
+    } else if (!modalVisible) {
+      try {
+        form.resetFields();
+      } catch (error) {
+        // Form might not be mounted yet
+      }
+      setFormInitialValues({});
+    }
+  }, [modalVisible, modalType, selectedMenuItem, form]);
+
   // Handle table changes
   const handleTableChange = (paginationInfo) => {
     loadMenuItems(paginationInfo.current, paginationInfo.pageSize);
@@ -273,10 +353,33 @@ const MenuManagement = () => {
         }
       }, 150);
     } else if (type === "ingredients" && menuItem) {
-      form.resetFields();
-      form.setFieldsValue({
-        ingredients: menuItem.ingredients || [],
+      // Use menuItem from state directly (already has latest data after reload)
+      let ingredientsData = [];
+
+      if (menuItem.ingredientDetails && menuItem.ingredientDetails.length > 0) {
+        ingredientsData = menuItem.ingredientDetails.map((detail) => ({
+          ingredientId: detail.ingredientId,
+          quantity: detail.quantity || 0,
+          unit: detail.unit || "kg",
+          notes: detail.notes || "",
+        }));
+      } else if (menuItem.ingredients && menuItem.ingredients.length > 0) {
+        ingredientsData = menuItem.ingredients.map((ingredientId) => ({
+          ingredientId: ingredientId,
+          quantity: 1,
+          unit: "kg",
+          notes: "",
+        }));
+      }
+
+      // Set initial values for Form (will be used when Form mounts)
+      setFormInitialValues({
+        ingredients: ingredientsData,
       });
+
+      // Also reset form to clear any previous values
+      form.resetFields();
+
       setImagePreview(null);
     } else {
       form.resetFields();
@@ -319,20 +422,37 @@ const MenuManagement = () => {
           menuItemId: selectedMenuItem.menuItemId,
         });
       } else if (modalType === "ingredients") {
-        await apiService.menu.updateMenuItemIngredients(
+        // Format ingredients with quantities for API
+        const ingredientsWithQuantity = values.ingredients.map((item) => ({
+          ingredientId: item.ingredientId,
+          quantity: item.quantity,
+          unit: item.unit || "kg",
+          notes: item.notes || "",
+        }));
+
+        await apiService.menu.updateMenuItemIngredientsWithQuantity(
           selectedMenuItem.menuItemId,
-          values.ingredients
+          ingredientsWithQuantity
         );
         message.success("Cập nhật nguyên liệu thành công");
+
+        // Dispatch event to trigger reload
         dispatchDataRefresh(DATA_REFRESH_EVENTS.MENU_ITEM_UPDATED, {
           menuItemId: selectedMenuItem.menuItemId,
         });
+
+        // Reload menu items to get updated ingredient data
+        loadMenuItems(pagination.current, pagination.pageSize);
       }
 
       setModalVisible(false);
       form.resetFields();
       setImagePreview(null);
-      loadMenuItems(pagination.current, pagination.pageSize);
+
+      // Reload menu items for all modal types
+      if (modalType !== "ingredients") {
+        loadMenuItems(pagination.current, pagination.pageSize);
+      }
     } catch (error) {
       message.error("Có lỗi xảy ra khi thực hiện thao tác");
       console.error("Error:", error);
@@ -457,7 +577,43 @@ const MenuManagement = () => {
             {price?.toLocaleString()} VNĐ
           </div>
           <div style={{ fontSize: "12px", color: "#999", marginTop: "2px" }}>
-            {record.ingredients?.length || 0} nguyên liệu
+            {(() => {
+              // Get ingredient names
+              let ingredientNames = [];
+              if (
+                record.ingredientDetails &&
+                record.ingredientDetails.length > 0
+              ) {
+                // New format: get names from ingredientDetails
+                ingredientNames = record.ingredientDetails.map((detail) => {
+                  const ingredient = ingredients.find(
+                    (ing) => ing.ingredientId === detail.ingredientId
+                  );
+                  return ingredient ? ingredient.name : detail.ingredientId;
+                });
+              } else if (record.ingredients && record.ingredients.length > 0) {
+                // Legacy format: get names from ingredients array
+                ingredientNames = record.ingredients.map((ingredientId) => {
+                  const ingredient = ingredients.find(
+                    (ing) => ing.ingredientId === ingredientId
+                  );
+                  return ingredient ? ingredient.name : ingredientId;
+                });
+              }
+
+              if (ingredientNames.length === 0) {
+                return "Chưa có nguyên liệu";
+              }
+
+              // Display ingredient names, max 2 lines
+              if (ingredientNames.length <= 2) {
+                return ingredientNames.join(", ");
+              } else {
+                return `${ingredientNames.slice(0, 2).join(", ")} +${
+                  ingredientNames.length - 2
+                }`;
+              }
+            })()}
           </div>
         </div>
       ),
@@ -592,38 +748,119 @@ const MenuManagement = () => {
     if (modalType === "ingredients") {
       return (
         <>
-          <Form.Item
-            name="ingredients"
-            label="Nguyên liệu"
-            rules={[
-              {
-                required: true,
-                message: "Vui lòng chọn ít nhất một nguyên liệu",
-              },
-            ]}
-          >
-            <Select
-              mode="multiple"
-              placeholder="Chọn nguyên liệu"
-              style={{ width: "100%" }}
-              optionLabelProp="label"
-            >
-              {ingredients.map((ingredient) => (
-                <Option
-                  key={ingredient.ingredientId}
-                  value={ingredient.ingredientId}
-                  label={ingredient.name}
-                >
-                  <div>
-                    <div className="font-medium">{ingredient.name}</div>
-                    <div className="text-sm text-gray-500">
-                      Tồn kho: {ingredient.currentStock} {ingredient.unit}
-                    </div>
+          <Form.List name="ingredients">
+            {(fields, { add, remove }) => (
+              <>
+                {fields.map(({ key, name, ...restField }) => (
+                  <div
+                    key={key}
+                    style={{
+                      display: "flex",
+                      marginBottom: 8,
+                      gap: 8,
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <Form.Item
+                      {...restField}
+                      name={[name, "ingredientId"]}
+                      rules={[{ required: true, message: "Chọn nguyên liệu" }]}
+                      style={{ flex: 2, marginBottom: 0 }}
+                    >
+                      <Select
+                        placeholder="Chọn nguyên liệu"
+                        showSearch
+                        filterOption={(input, option) =>
+                          (option?.label ?? "")
+                            .toLowerCase()
+                            .includes(input.toLowerCase())
+                        }
+                      >
+                        {ingredients.map((ingredient) => (
+                          <Option
+                            key={ingredient.ingredientId}
+                            value={ingredient.ingredientId}
+                            label={ingredient.name}
+                          >
+                            <div>
+                              <div className="font-medium">
+                                {ingredient.name}
+                              </div>
+                              <div className="text-sm text-gray-500">
+                                Tồn kho: {ingredient.currentStock}{" "}
+                                {ingredient.unit}
+                              </div>
+                            </div>
+                          </Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                    <Form.Item
+                      {...restField}
+                      name={[name, "quantity"]}
+                      rules={[
+                        { required: true, message: "Nhập số lượng" },
+                        {
+                          type: "number",
+                          min: 0.001,
+                          message: "Số lượng phải > 0",
+                        },
+                      ]}
+                      style={{ flex: 1, marginBottom: 0 }}
+                    >
+                      <InputNumber
+                        placeholder="Số lượng"
+                        min={0.001}
+                        step={0.1}
+                        style={{ width: "100%" }}
+                        formatter={(value) =>
+                          value
+                            ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                            : ""
+                        }
+                        parser={(value) =>
+                          value ? value.replace(/\$\s?|(,*)/g, "") : ""
+                        }
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      {...restField}
+                      name={[name, "unit"]}
+                      rules={[{ required: true, message: "Chọn đơn vị" }]}
+                      style={{ flex: 0.8, marginBottom: 0 }}
+                    >
+                      <Select placeholder="Đơn vị">
+                        <Option value="kg">kg</Option>
+                        <Option value="g">g</Option>
+                        <Option value="liter">liter</Option>
+                        <Option value="ml">ml</Option>
+                        <Option value="piece">cái</Option>
+                      </Select>
+                    </Form.Item>
+                    <Button
+                      type="text"
+                      danger
+                      onClick={() => remove(name)}
+                      icon={<DeleteOutlined />}
+                      style={{ marginTop: 4 }}
+                    >
+                      Xóa
+                    </Button>
                   </div>
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
+                ))}
+                <Form.Item>
+                  <Button
+                    type="dashed"
+                    onClick={() => add()}
+                    block
+                    icon={<PlusOutlined />}
+                  >
+                    Thêm nguyên liệu
+                  </Button>
+                </Form.Item>
+              </>
+            )}
+          </Form.List>
         </>
       );
     }
@@ -893,15 +1130,36 @@ const MenuManagement = () => {
 
       {/* Modal */}
       <Modal
+        key={
+          modalType === "ingredients"
+            ? `ingredients-${selectedMenuItem?.menuItemId || "new"}`
+            : modalType
+        }
         title={getModalTitle()}
         open={modalVisible}
         onOk={handleModalOk}
-        onCancel={() => setModalVisible(false)}
+        onCancel={() => {
+          setModalVisible(false);
+          form.resetFields();
+          setSelectedMenuItem(null);
+          setFormInitialValues({});
+        }}
         width={600}
         okText="Lưu"
         cancelText="Hủy"
+        destroyOnHidden={true}
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          initialValues={modalType === "ingredients" ? formInitialValues : {}}
+          key={
+            modalType === "ingredients"
+              ? `form-${selectedMenuItem?.menuItemId || "new"}`
+              : modalType
+          }
+        >
           {getFormFields()}
         </Form>
       </Modal>

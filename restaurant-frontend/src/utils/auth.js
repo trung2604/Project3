@@ -32,6 +32,62 @@ export function isCustomer(role) {
   return role === "CUSTOMER";
 }
 
+// Check if user can create orders
+export function canCreateOrder(role) {
+  return hasRole(role, ["STAFF", "RESTAURANT_MANAGER", "ADMIN"]);
+}
+
+// Check if user can update order status (kitchen staff, staff, managers, admin)
+export function canUpdateOrderStatus(role) {
+  return hasRole(role, [
+    "KITCHEN_STAFF",
+    "STAFF",
+    "RESTAURANT_MANAGER",
+    "ADMIN",
+  ]);
+}
+
+// Check if user can cancel orders
+export function canCancelOrder(role) {
+  return hasRole(role, [
+    "CUSTOMER",
+    "STAFF",
+    "KITCHEN_STAFF",
+    "RESTAURANT_MANAGER",
+    "ADMIN",
+  ]);
+}
+
+// Check if user can manage staff
+export function canManageStaff(role) {
+  return hasRole(role, ["RESTAURANT_MANAGER", "ADMIN"]);
+}
+
+// Check if user can manage settings
+export function canManageSettings(role) {
+  return hasRole(role, ["RESTAURANT_MANAGER", "ADMIN"]);
+}
+
+// Check if user is kitchen staff
+export function isKitchenStaff(role) {
+  return role === "KITCHEN_STAFF";
+}
+
+// Check if user is warehouse staff
+export function isWarehouseStaff(role) {
+  return role === "WAREHOUSE_STAFF";
+}
+
+// Check if user is manager or admin
+export function isManagerOrAdmin(role) {
+  return hasRole(role, ["RESTAURANT_MANAGER", "ADMIN"]);
+}
+
+// Check if user is admin
+export function isAdmin(role) {
+  return role === "ADMIN";
+}
+
 // Get redirect path based on role after login
 export function getRedirectPathByRole(role) {
   switch (role) {

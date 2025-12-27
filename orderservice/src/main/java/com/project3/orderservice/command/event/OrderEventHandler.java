@@ -135,7 +135,7 @@ public class OrderEventHandler {
                 return;
             }
 
-            Map<String, Integer> ingredientQuantities = ingredientExtractionService.extractIngredientQuantities(order.getOrderId());
+            Map<String, Double> ingredientQuantities = ingredientExtractionService.extractIngredientQuantities(order.getOrderId());
             
             if (ingredientQuantities.isEmpty()) {
                 log.warn("No ingredients found for order {}", event.getOrderId());
@@ -143,7 +143,7 @@ public class OrderEventHandler {
             }
 
             // Publish inventory deduction events for each ingredient
-            for (Map.Entry<String, Integer> entry : ingredientQuantities.entrySet()) {
+            for (Map.Entry<String, Double> entry : ingredientQuantities.entrySet()) {
                 eventPublisher.publishInventoryDeduction(
                     event.getOrderId(), 
                     entry.getKey(), 

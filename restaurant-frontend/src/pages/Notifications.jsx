@@ -18,6 +18,7 @@ import {
 } from "@ant-design/icons";
 import notificationAPI from "../services/notificationService";
 import { useAuth } from "../context/AuthContext";
+import NotificationDetailModal from "../components/Common/NotificationDetailModal";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/vi";
@@ -42,6 +43,8 @@ const Notifications = () => {
     search: undefined,
   });
   const [selectedIds, setSelectedIds] = useState([]);
+  const [selectedNotification, setSelectedNotification] = useState(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   const userId = user?.userId || user?.id || "admin";
 
@@ -269,6 +272,24 @@ const Notifications = () => {
                       notification.status === "UNREAD" ? "#f0f9ff" : "white",
                     borderRadius: "8px",
                     marginBottom: "8px",
+                    cursor: "pointer",
+                  }}
+                  onClick={(e) => {
+                    // Only open modal if click is not on button or checkbox
+                    const target = e.target;
+                    if (
+                      target.closest("button") ||
+                      target.closest("input[type='checkbox']") ||
+                      target.closest(".ant-checkbox")
+                    ) {
+                      return; // Let button/checkbox handle their own clicks
+                    }
+                    setSelectedNotification(notification);
+                    setModalVisible(true);
+                    // Auto mark as read when clicking to view details
+                    if (notification.status === "UNREAD") {
+                      handleMarkAsRead(notification.notificationId);
+                    }
                   }}
                 >
                   <div style={{ width: "100%", display: "flex", gap: "12px" }}>
@@ -277,6 +298,7 @@ const Notifications = () => {
                         notification.notificationId
                       )}
                       onChange={(e) => {
+                        e.stopPropagation();
                         if (e.target.checked) {
                           setSelectedIds([
                             ...selectedIds,
@@ -290,6 +312,7 @@ const Notifications = () => {
                           );
                         }
                       }}
+                      onClick={(e) => e.stopPropagation()}
                     />
                     <div style={{ flex: 1 }}>
                       <div
@@ -347,15 +370,16 @@ const Notifications = () => {
                           )}{" "}
                           ({dayjs(notification.createdAt).fromNow()})
                         </span>
-                        <div>
+                        <div onClick={(e) => e.stopPropagation()}>
                           {notification.status === "UNREAD" && (
                             <Button
                               type="link"
                               size="small"
                               icon={<CheckOutlined />}
-                              onClick={() =>
-                                handleMarkAsRead(notification.notificationId)
-                              }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMarkAsRead(notification.notificationId);
+                              }}
                               style={{ marginRight: "8px" }}
                             >
                               Đánh dấu đã đọc
@@ -366,9 +390,10 @@ const Notifications = () => {
                             size="small"
                             icon={<DeleteOutlined />}
                             danger
-                            onClick={() =>
-                              handleArchive(notification.notificationId)
-                            }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleArchive(notification.notificationId);
+                            }}
                           >
                             Lưu vào archive
                           </Button>
@@ -399,6 +424,29 @@ const Notifications = () => {
           </>
         )}
       </Card>
+      <NotificationDetailModal
+        notification={selectedNotification}
+        visible={modalVisible}
+        onClose={() => {
+          setModalVisible(false);
+          setSelectedNotification(null);
+        }}
+        onMarkAsRead={(notificationId) => {
+          handleMarkAsRead(notificationId);
+        }}
+        onArchive={(notificationId) => {
+          handleArchive(notificationId);
+        }}
+        onUpdate={(updatedNotification) => {
+          setNotifications((prev) =>
+            prev.map((n) =>
+              n.notificationId === updatedNotification.notificationId
+                ? updatedNotification
+                : n
+            )
+          );
+        }}
+      />
     </div>
   );
 };

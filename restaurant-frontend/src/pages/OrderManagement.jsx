@@ -30,7 +30,10 @@ import {
   CloseCircleOutlined,
   TruckOutlined,
   ShopOutlined,
+  FilterOutlined,
+  ClearOutlined,
 } from "@ant-design/icons";
+import { useLocation, useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
 import apiService from "../services/apiService";
 import {
@@ -40,7 +43,14 @@ import {
   DATETIME_FORMAT,
 } from "../constants.js";
 import { useAuth } from "../context/AuthContext";
-import { canManageMenu } from "../utils/auth";
+import {
+  canManageMenu,
+  canCreateOrder,
+  canUpdateOrderStatus,
+  canCancelOrder,
+  isKitchenStaff,
+  isManagerOrAdmin,
+} from "../utils/auth";
 import Loading from "../components/Common/Loading";
 import ErrorPage from "../components/Common/ErrorPage";
 import {
@@ -56,6 +66,8 @@ const { RangePicker } = DatePicker;
 const OrderManagement = () => {
   const { message: antdMessage } = App.useApp();
   const { role, user, loading: authLoading } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [form] = Form.useForm();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -64,7 +76,9 @@ const OrderManagement = () => {
     type: "",
     startDate: null,
     endDate: null,
+    search: "",
   });
+  const [searchText, setSearchText] = useState("");
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -72,6 +86,11 @@ const OrderManagement = () => {
 
   const canManage = canManageMenu(role);
   const isCustomer = role === "CUSTOMER";
+  const canCreate = canCreateOrder(role);
+  const canUpdateStatus = canUpdateOrderStatus(role);
+  const canCancel = canCancelOrder(role);
+  const isKitchen = isKitchenStaff(role);
+  const isManager = isManagerOrAdmin(role);
 
   useEffect(() => {
     // Wait for auth to finish loading before making API calls
@@ -86,11 +105,6 @@ const OrderManagement = () => {
       return;
     }
 
-    // Debug: Log user role
-    if (import.meta.env.DEV) {
-      console.log("OrderManagement - User role:", role, "User:", user);
-    }
-
     // Only load orders if we have a valid token
     loadOrders();
     if (canManage) {
@@ -98,6 +112,49 @@ const OrderManagement = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters, role, authLoading]);
+
+  // Check for orderId in URL query params and auto-open detail modal
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const orderId = searchParams.get("orderId");
+
+    if (orderId && !detailModalVisible) {
+      // Wait for orders to load first
+      if (orders.length > 0) {
+        // Find order in the list first
+        const order = orders.find((o) => o.orderId === orderId);
+        if (order) {
+          setSelectedOrder(order);
+          setDetailModalVisible(true);
+          // Remove orderId from URL to clean it up
+          searchParams.delete("orderId");
+          const newSearch = searchParams.toString();
+          navigate(`/dashboard/orders${newSearch ? `?${newSearch}` : ""}`, {
+            replace: true,
+          });
+        } else {
+          // Order not in list, fetch it directly
+          showOrderDetail(orderId);
+          // Remove orderId from URL
+          searchParams.delete("orderId");
+          const newSearch = searchParams.toString();
+          navigate(`/dashboard/orders${newSearch ? `?${newSearch}` : ""}`, {
+            replace: true,
+          });
+        }
+      } else if (!loading) {
+        // Orders not loaded yet, fetch the specific order
+        showOrderDetail(orderId);
+        // Remove orderId from URL
+        searchParams.delete("orderId");
+        const newSearch = searchParams.toString();
+        navigate(`/dashboard/orders${newSearch ? `?${newSearch}` : ""}`, {
+          replace: true,
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search, orders, detailModalVisible, loading]);
 
   // Listen to menu item changes to reload menu items
   useEffect(() => {
@@ -123,10 +180,8 @@ const OrderManagement = () => {
   }, [canManage]);
 
   const loadOrders = async () => {
-    // Check authentication before making request
     const token = localStorage.getItem("accessToken");
     if (!token) {
-      console.warn("No access token, cannot load orders");
       return;
     }
 
@@ -137,33 +192,41 @@ const OrderManagement = () => {
         ...(filters.type && { type: filters.type }),
         ...(filters.startDate && { startDate: filters.startDate }),
         ...(filters.endDate && { endDate: filters.endDate }),
-        // Don't pass customerId for customers - backend will auto-set from X-User-Id header
-        // This prevents 403 errors when user info is not yet cached in Order Service
-        // Only staff/managers can filter by customerId to view other users' orders
-        ...(!isCustomer &&
+        ...(isManager &&
           filters.customerId && { customerId: filters.customerId }),
       };
 
       const response = await apiService.order.getAllOrders(params);
-      console.log("Orders API response:", response); // Debug
-      // Backend returns ApiResponseDTO<List<OrderResponse>>, interceptor extracts .data
-      // So response should be the list directly
-      const ordersList = Array.isArray(response) ? response : [];
-      console.log("Orders list length:", ordersList.length); // Debug
+      let ordersList = Array.isArray(response) ? response : [];
+
+      // Client-side search filtering
+      if (filters.search && filters.search.trim()) {
+        const searchLower = filters.search.toLowerCase().trim();
+        ordersList = ordersList.filter((order) => {
+          const orderIdMatch = order.orderId
+            ?.toLowerCase()
+            .includes(searchLower);
+          const customerNameMatch = order.customerName
+            ?.toLowerCase()
+            .includes(searchLower);
+          const customerPhoneMatch = order.customerPhone?.includes(searchLower);
+          const tableNumberMatch = order.tableNumber
+            ?.toString()
+            .includes(searchLower);
+          return (
+            orderIdMatch ||
+            customerNameMatch ||
+            customerPhoneMatch ||
+            tableNumberMatch
+          );
+        });
+      }
+
       setOrders(ordersList);
     } catch (error) {
       console.error("Error loading orders:", error);
 
-      // Handle 403 Forbidden - user might not have role in JWT token
       if (error.response?.status === 403) {
-        console.warn(
-          "403 Forbidden - User role in database:",
-          role,
-          "but JWT token might not have this role."
-        );
-        console.warn(
-          "Solution: Admin needs to sync role in Staff Management, then user needs to logout and login again."
-        );
         antdMessage.warning({
           content:
             "Bạn không có quyền truy cập. Vui lòng liên hệ admin để khởi tạo role KITCHEN_STAFF trong Keycloak (Admin > Initialize Roles) và đồng bộ role, sau đó đăng xuất và đăng nhập lại.",
@@ -347,7 +410,8 @@ const OrderManagement = () => {
     const buttons = [];
     const { orderStatus, orderType } = order;
 
-    if (canManage) {
+    // Only kitchen staff, staff, managers, and admin can update order status
+    if (canUpdateStatus) {
       if (orderStatus === "PENDING") {
         buttons.push(
           <Button
@@ -400,10 +464,8 @@ const OrderManagement = () => {
       }
     }
 
-    if (
-      (orderStatus === "PENDING" || orderStatus === "COOKING") &&
-      (isCustomer || canManage)
-    ) {
+    // Customers and staff can cancel orders in PENDING or COOKING status
+    if (canCancel && (orderStatus === "PENDING" || orderStatus === "COOKING")) {
       buttons.push(
         <Popconfirm
           key="cancel"
@@ -440,36 +502,103 @@ const OrderManagement = () => {
     return buttons.length > 0 ? <Space>{buttons}</Space> : null;
   };
 
+  const clearFilters = () => {
+    setFilters({
+      status: "",
+      type: "",
+      startDate: null,
+      endDate: null,
+      search: "",
+    });
+    setSearchText("");
+  };
+
+  const hasActiveFilters = () => {
+    return (
+      filters.status ||
+      filters.type ||
+      filters.startDate ||
+      filters.endDate ||
+      filters.search
+    );
+  };
+
   const columns = [
     {
       title: "Mã đơn",
       dataIndex: "orderId",
       key: "orderId",
-      width: 200,
+      width: 160,
+      sorter: (a, b) => a.orderId.localeCompare(b.orderId),
       render: (text) => (
-        <strong
-          style={{
-            fontFamily: "monospace",
-            color: "#f59e0b",
-            fontSize: "14px",
-          }}
-        >
-          {text.substring(0, 8)}...
-        </strong>
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <strong
+            style={{
+              fontFamily: "monospace",
+              color: "#f59e0b",
+              fontSize: "13px",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+            onClick={() => {
+              setSearchText(text);
+              setFilters({ ...filters, search: text });
+            }}
+            title="Click để tìm kiếm"
+          >
+            {text.substring(0, 8)}...
+          </strong>
+          <Button
+            type="text"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => showOrderDetail(text)}
+            style={{
+              padding: 0,
+              height: "auto",
+              flexShrink: 0,
+              fontSize: "12px",
+            }}
+            title="Xem chi tiết"
+          />
+        </div>
       ),
     },
-    ...(canManage
+    ...(isManager
       ? [
           {
             title: "Khách hàng",
             key: "customer",
-            width: 150,
+            width: 160,
+            ellipsis: {
+              showTitle: false,
+            },
             render: (_, record) => (
               <div>
-                <div style={{ fontWeight: "500" }}>
+                <div
+                  style={{
+                    fontWeight: "500",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    maxWidth: "160px",
+                  }}
+                  title={record.customerName || "N/A"}
+                >
                   {record.customerName || "N/A"}
                 </div>
-                <small style={{ color: "#8c8c8c", fontSize: "12px" }}>
+                <small
+                  style={{
+                    color: "#8c8c8c",
+                    fontSize: "11px",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    display: "block",
+                    maxWidth: "160px",
+                  }}
+                  title={record.customerPhone || ""}
+                >
                   {record.customerPhone || ""}
                 </small>
               </div>
@@ -481,28 +610,30 @@ const OrderManagement = () => {
       title: "Loại",
       dataIndex: "orderType",
       key: "orderType",
-      width: 100,
+      width: 110,
       render: getTypeTag,
     },
     {
       title: "Trạng thái",
       dataIndex: "orderStatus",
       key: "orderStatus",
-      width: 140,
+      width: 130,
       render: getStatusTag,
     },
     {
       title: "Tổng tiền",
       dataIndex: "totalAmount",
       key: "totalAmount",
-      width: 140,
+      width: 130,
       align: "right",
+      sorter: (a, b) => (a.totalAmount || 0) - (b.totalAmount || 0),
       render: (amount) => (
         <span
           style={{
             fontWeight: "600",
-            fontSize: "15px",
+            fontSize: "14px",
             color: "#f59e0b",
+            whiteSpace: "nowrap",
           }}
         >
           {amount
@@ -515,12 +646,21 @@ const OrderManagement = () => {
       title: "Ngày tạo",
       dataIndex: "orderDate",
       key: "orderDate",
-      width: 160,
+      width: 120,
+      sorter: (a, b) => {
+        if (!a.orderDate && !b.orderDate) return 0;
+        if (!a.orderDate) return 1;
+        if (!b.orderDate) return -1;
+        return new Date(a.orderDate) - new Date(b.orderDate);
+      },
+      defaultSortOrder: "descend",
       render: (date) =>
         date ? (
-          <div>
-            <div>{dayjs(date).format("DD/MM/YYYY")}</div>
-            <small style={{ color: "#8c8c8c", fontSize: "12px" }}>
+          <div style={{ whiteSpace: "nowrap" }}>
+            <div style={{ fontWeight: "500", fontSize: "13px" }}>
+              {dayjs(date).format("DD/MM/YYYY")}
+            </div>
+            <small style={{ color: "#8c8c8c", fontSize: "11px" }}>
               {dayjs(date).format("HH:mm")}
             </small>
           </div>
@@ -531,18 +671,9 @@ const OrderManagement = () => {
     {
       title: "Thao tác",
       key: "action",
-      width: isCustomer ? 150 : 200,
-      fixed: "right",
+      width: isCustomer ? 120 : 180,
       render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            icon={<EyeOutlined />}
-            onClick={() => showOrderDetail(record.orderId)}
-            style={{ padding: "4px 8px" }}
-          >
-            {isCustomer ? "Xem" : "Chi tiết"}
-          </Button>
+        <Space size="small" wrap>
           {getActionButtons(record)}
         </Space>
       ),
@@ -565,6 +696,23 @@ const OrderManagement = () => {
 
   return (
     <div style={{ padding: "24px", maxWidth: "1400px", margin: "0 auto" }}>
+      <style>{`
+        .ant-table-tbody > tr.row-pending:hover > td {
+          background-color: #fff7e6 !important;
+        }
+        .ant-table-tbody > tr.row-cooking:hover > td {
+          background-color: #e6f7ff !important;
+        }
+        .ant-table-tbody > tr.row-ready:hover > td {
+          background-color: #f6ffed !important;
+        }
+        .ant-table-tbody > tr.row-cancelled:hover > td {
+          background-color: #fff1f0 !important;
+        }
+        .ant-table-tbody > tr:hover > td {
+          background-color: #fafafa !important;
+        }
+      `}</style>
       {/* Header */}
       <div style={{ marginBottom: "24px" }}>
         <h1
@@ -715,112 +863,291 @@ const OrderManagement = () => {
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
         }}
       >
-        <Space
-          style={{
-            marginBottom: "16px",
-            width: "100%",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-          }}
-        >
-          <Space wrap>
-            <Search
-              placeholder="Tìm kiếm đơn hàng..."
-              allowClear
-              style={{ width: isCustomer ? 200 : 300 }}
-              size="large"
-              onSearch={(value) => {
-                // Implement search if needed
-              }}
-            />
-            <Select
-              placeholder="Trạng thái"
-              allowClear
-              style={{ width: 150 }}
-              size="large"
-              value={filters.status}
-              onChange={(value) => setFilters({ ...filters, status: value })}
-            >
-              {Object.entries(ORDER_STATUS).map(([key, value]) => (
-                <Option key={key} value={value}>
-                  {getStatusTag(value).props.children}
-                </Option>
-              ))}
-            </Select>
-            {!isCustomer && (
-              <Select
-                placeholder="Loại đơn"
-                allowClear
-                style={{ width: 150 }}
-                size="large"
-                value={filters.type}
-                onChange={(value) => setFilters({ ...filters, type: value })}
+        {/* Search and Filters Section */}
+        <div style={{ marginBottom: "24px" }}>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} lg={16}>
+              <Space wrap style={{ width: "100%" }}>
+                <Search
+                  placeholder="Tìm kiếm theo mã đơn, tên khách hàng, SĐT..."
+                  allowClear
+                  value={searchText}
+                  onChange={(e) => {
+                    setSearchText(e.target.value);
+                    if (!e.target.value) {
+                      setFilters({ ...filters, search: "" });
+                    }
+                  }}
+                  onSearch={(value) => {
+                    setFilters({ ...filters, search: value });
+                  }}
+                  style={{
+                    width: isCustomer ? "100%" : "350px",
+                    maxWidth: "100%",
+                  }}
+                  size="large"
+                  enterButton={<SearchOutlined />}
+                />
+                <Select
+                  placeholder="Chọn trạng thái"
+                  allowClear
+                  style={{ width: 160 }}
+                  size="large"
+                  value={filters.status || undefined}
+                  onChange={(value) =>
+                    setFilters({ ...filters, status: value || "" })
+                  }
+                >
+                  {Object.entries(ORDER_STATUS).map(([key, value]) => (
+                    <Option key={key} value={value}>
+                      {getStatusTag(value).props.children}
+                    </Option>
+                  ))}
+                </Select>
+                {isManager && (
+                  <Select
+                    placeholder="Chọn loại đơn"
+                    allowClear
+                    style={{ width: 160 }}
+                    size="large"
+                    value={filters.type || undefined}
+                    onChange={(value) =>
+                      setFilters({ ...filters, type: value || "" })
+                    }
+                  >
+                    {Object.entries(ORDER_TYPES).map(([key, value]) => (
+                      <Option key={key} value={value}>
+                        {getTypeTag(value).props.children}
+                      </Option>
+                    ))}
+                  </Select>
+                )}
+                <RangePicker
+                  placeholder={["Từ ngày", "Đến ngày"]}
+                  size="large"
+                  format="DD/MM/YYYY"
+                  value={
+                    filters.startDate && filters.endDate
+                      ? [dayjs(filters.startDate), dayjs(filters.endDate)]
+                      : null
+                  }
+                  onChange={(dates) => {
+                    if (dates && dates[0] && dates[1]) {
+                      setFilters({
+                        ...filters,
+                        startDate: dates[0].format("YYYY-MM-DDTHH:mm:ss"),
+                        endDate: dates[1].format("YYYY-MM-DDTHH:mm:ss"),
+                      });
+                    } else {
+                      setFilters({
+                        ...filters,
+                        startDate: null,
+                        endDate: null,
+                      });
+                    }
+                  }}
+                />
+                {hasActiveFilters() && (
+                  <Button
+                    icon={<ClearOutlined />}
+                    onClick={clearFilters}
+                    size="large"
+                    style={{ borderRadius: "8px" }}
+                  >
+                    Xóa bộ lọc
+                  </Button>
+                )}
+              </Space>
+            </Col>
+            <Col xs={24} lg={8}>
+              <Space wrap style={{ width: "100%", justifyContent: "flex-end" }}>
+                {canManage && (
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => setCreateModalVisible(true)}
+                    size="large"
+                    style={{ borderRadius: "8px" }}
+                  >
+                    Tạo đơn hàng
+                  </Button>
+                )}
+                <Button
+                  icon={<ReloadOutlined />}
+                  onClick={loadOrders}
+                  size="large"
+                  style={{ borderRadius: "8px" }}
+                >
+                  Làm mới
+                </Button>
+              </Space>
+            </Col>
+          </Row>
+
+          {/* Quick Filter Buttons */}
+          <div style={{ marginTop: "16px" }}>
+            <Space wrap>
+              <span
+                style={{
+                  color: "#8c8c8c",
+                  fontSize: "14px",
+                  marginRight: "8px",
+                }}
               >
-                {Object.entries(ORDER_TYPES).map(([key, value]) => (
-                  <Option key={key} value={value}>
-                    {getTypeTag(value).props.children}
-                  </Option>
-                ))}
-              </Select>
-            )}
-            <RangePicker
-              placeholder={["Từ ngày", "Đến ngày"]}
-              size="large"
-              onChange={(dates) => {
-                if (dates) {
-                  setFilters({
-                    ...filters,
-                    startDate: dates[0]?.format("YYYY-MM-DDTHH:mm:ss"),
-                    endDate: dates[1]?.format("YYYY-MM-DDTHH:mm:ss"),
-                  });
-                } else {
-                  setFilters({
-                    ...filters,
-                    startDate: null,
-                    endDate: null,
-                  });
-                }
-              }}
-            />
-          </Space>
-          <Space wrap>
-            {canManage && (
+                <FilterOutlined /> Lọc nhanh:
+              </span>
               <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => setCreateModalVisible(true)}
-                size="large"
-                style={{ borderRadius: "8px" }}
+                size="small"
+                type={filters.status === "PENDING" ? "primary" : "default"}
+                onClick={() =>
+                  setFilters({
+                    ...filters,
+                    status: filters.status === "PENDING" ? "" : "PENDING",
+                  })
+                }
               >
-                Tạo đơn hàng
+                Chờ xử lý
               </Button>
-            )}
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={loadOrders}
-              size="large"
-              style={{ borderRadius: "8px" }}
-            >
-              Làm mới
-            </Button>
-          </Space>
-        </Space>
+              <Button
+                size="small"
+                type={filters.status === "COOKING" ? "primary" : "default"}
+                onClick={() =>
+                  setFilters({
+                    ...filters,
+                    status: filters.status === "COOKING" ? "" : "COOKING",
+                  })
+                }
+              >
+                Đang chế biến
+              </Button>
+              <Button
+                size="small"
+                type={filters.status === "READY" ? "primary" : "default"}
+                onClick={() =>
+                  setFilters({
+                    ...filters,
+                    status: filters.status === "READY" ? "" : "READY",
+                  })
+                }
+              >
+                Sẵn sàng
+              </Button>
+              <Button
+                size="small"
+                type={filters.status === "COMPLETED" ? "primary" : "default"}
+                onClick={() =>
+                  setFilters({
+                    ...filters,
+                    status: filters.status === "COMPLETED" ? "" : "COMPLETED",
+                  })
+                }
+              >
+                Hoàn thành
+              </Button>
+              <Button
+                size="small"
+                type={filters.status === "CANCELLED" ? "primary" : "default"}
+                danger
+                onClick={() =>
+                  setFilters({
+                    ...filters,
+                    status: filters.status === "CANCELLED" ? "" : "CANCELLED",
+                  })
+                }
+              >
+                Đã hủy
+              </Button>
+              {isManager && (
+                <>
+                  <Button
+                    size="small"
+                    type={filters.type === "DINE_IN" ? "primary" : "default"}
+                    onClick={() =>
+                      setFilters({
+                        ...filters,
+                        type: filters.type === "DINE_IN" ? "" : "DINE_IN",
+                      })
+                    }
+                  >
+                    Ăn tại chỗ
+                  </Button>
+                  <Button
+                    size="small"
+                    type={filters.type === "TAKEOUT" ? "primary" : "default"}
+                    onClick={() =>
+                      setFilters({
+                        ...filters,
+                        type: filters.type === "TAKEOUT" ? "" : "TAKEOUT",
+                      })
+                    }
+                  >
+                    Mang đi
+                  </Button>
+                  <Button
+                    size="small"
+                    type={filters.type === "DELIVERY" ? "primary" : "default"}
+                    onClick={() =>
+                      setFilters({
+                        ...filters,
+                        type: filters.type === "DELIVERY" ? "" : "DELIVERY",
+                      })
+                    }
+                  >
+                    Giao hàng
+                  </Button>
+                </>
+              )}
+            </Space>
+          </div>
+        </div>
 
         <Table
           columns={columns}
           dataSource={orders}
           rowKey="orderId"
           loading={loading}
-          scroll={{ x: isCustomer ? 1000 : 1200 }}
+          scroll={{
+            x: isCustomer ? 800 : 1000,
+          }}
           pagination={{
             defaultPageSize: PAGINATION.DEFAULT_PAGE_SIZE,
             pageSizeOptions: PAGINATION.PAGE_SIZE_OPTIONS,
             showSizeChanger: true,
-            showTotal: (total) => `Tổng cộng: ${total} đơn hàng`,
+            showTotal: (total, range) =>
+              `${range[0]}-${range[1]} của ${total} đơn hàng`,
             style: { marginTop: "16px" },
           }}
           style={{
             borderRadius: "8px",
+          }}
+          rowClassName={(record, index) => {
+            if (record.orderStatus === "CANCELLED") return "row-cancelled";
+            if (record.orderStatus === "PENDING") return "row-pending";
+            if (record.orderStatus === "COOKING") return "row-cooking";
+            if (record.orderStatus === "READY") return "row-ready";
+            return "";
+          }}
+          locale={{
+            emptyText: (
+              <div style={{ padding: "40px", textAlign: "center" }}>
+                <p
+                  style={{
+                    fontSize: "16px",
+                    color: "#8c8c8c",
+                    marginBottom: "8px",
+                  }}
+                >
+                  {hasActiveFilters()
+                    ? "Không tìm thấy đơn hàng phù hợp với bộ lọc"
+                    : "Chưa có đơn hàng nào"}
+                </p>
+                {hasActiveFilters() && (
+                  <Button type="link" onClick={clearFilters}>
+                    Xóa bộ lọc
+                  </Button>
+                )}
+              </div>
+            ),
           }}
         />
       </Card>

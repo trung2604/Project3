@@ -30,8 +30,15 @@ public class MenuItem {
     private Integer preparationTime;
     private String recipe; // Công thức món ăn
 
+    // Legacy: Simple list of ingredient IDs (for backward compatibility)
     @ElementCollection(fetch = FetchType.LAZY)
+    @Column(name = "ingredient_id")
+    @CollectionTable(name = "menu_item_ingredients_legacy", joinColumns = @JoinColumn(name = "menu_item_id"))
     private List<String> ingredients = new ArrayList<>();
+    
+    // New: Detailed ingredient information with quantities
+    @OneToMany(mappedBy = "menuItem", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<MenuItemIngredient> menuItemIngredients = new ArrayList<>();
     
     /**
      * Business logic: Checks if menu item is active

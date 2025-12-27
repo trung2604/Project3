@@ -56,6 +56,64 @@ public class MenuServiceClient extends BaseHttpClientService {
         return ingredients != null ? ingredients : List.of();
     }
     
+    /**
+     * Gets menu item ingredients with quantities (new method)
+     * Returns Map of ingredientId -> quantity per serving
+     */
+    public Map<String, Double> getMenuItemIngredientsWithQuantity(String menuItemId) {
+        if (menuItemId == null || menuItemId.isEmpty()) {
+            return Map.of();
+        }
+        
+        Map<String, Double> ingredientQuantities = new java.util.HashMap<>();
+        
+        try {
+            String url = menuServiceUrl + "/api/restaurant/menu/items/" + menuItemId;
+            Map<String, Object> responseBody = fetchFromService(url);
+            Map<String, Object> data = extractData(responseBody);
+            
+            if (data == null) {
+                return ingredientQuantities;
+            }
+            
+            // Try to get ingredientDetails first (new format with quantities)
+            Object ingredientDetailsObj = data.get("ingredientDetails");
+            if (ingredientDetailsObj instanceof List) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> ingredientDetails = (List<Map<String, Object>>) ingredientDetailsObj;
+                if (!ingredientDetails.isEmpty()) {
+                    for (Map<String, Object> detail : ingredientDetails) {
+                        String ingredientId = (String) detail.get("ingredientId");
+                        Object quantityObj = detail.get("quantity");
+                        if (ingredientId != null && quantityObj != null) {
+                            Double quantity = quantityObj instanceof Number 
+                                ? ((Number) quantityObj).doubleValue() 
+                                : Double.parseDouble(quantityObj.toString());
+                            ingredientQuantities.put(ingredientId, quantity);
+                        }
+                    }
+                    log.debug("Found {} ingredients with quantities for menu item {}", 
+                        ingredientQuantities.size(), menuItemId);
+                    return ingredientQuantities;
+                }
+            }
+            
+            // Fallback to legacy format (simple ingredient IDs, default quantity = 1.0)
+            Object ingredientsObj = data.get("ingredients");
+            if (ingredientsObj instanceof List) {
+                @SuppressWarnings("unchecked")
+                List<String> ingredients = (List<String>) ingredientsObj;
+                for (String ingredientId : ingredients) {
+                    ingredientQuantities.put(ingredientId, 1.0); // Default: 1 unit per serving
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error fetching menu item ingredients with quantity for {}: {}", menuItemId, e.getMessage());
+        }
+        
+        return ingredientQuantities;
+    }
+    
     @SuppressWarnings("unchecked")
     private List<String> fetchMenuItemIngredientsFromService(String menuItemId) {
         String url = menuServiceUrl + "/api/restaurant/menu/items/" + menuItemId;

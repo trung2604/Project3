@@ -92,12 +92,16 @@ public class OrderEventPublisher {
     /**
      * Publishes inventory deduction event for an ingredient
      */
-    public void publishInventoryDeduction(String orderId, String ingredientId, Integer quantity, String reason) {
+    public void publishInventoryDeduction(String orderId, String ingredientId, Double quantity, String reason) {
         try {
             InventoryDeductionEvent deductionEvent = new InventoryDeductionEvent();
             deductionEvent.setOrderId(orderId);
             deductionEvent.setIngredientId(ingredientId);
-            deductionEvent.setQuantity(quantity);
+            // Use quantityDouble for precise quantities
+            deductionEvent.setQuantityDouble(quantity);
+            // Also set quantity for backward compatibility (rounded)
+            deductionEvent.setQuantity(quantity != null ? quantity.intValue() : 0);
+            deductionEvent.setUnit(OrderConstants.DEFAULT_UNIT);
             deductionEvent.setUnit(OrderConstants.DEFAULT_UNIT);
             deductionEvent.setReference(orderId);
             deductionEvent.setReason(reason != null ? reason : OrderConstants.DEFAULT_INVENTORY_REASON);
@@ -108,6 +112,13 @@ public class OrderEventPublisher {
             log.error("Failed to send inventory deduction event for order {} ingredient {}: {}", 
                 orderId, ingredientId, e.getMessage());
         }
+    }
+    
+    /**
+     * Overloaded method for backward compatibility with Integer quantity
+     */
+    public void publishInventoryDeduction(String orderId, String ingredientId, Integer quantity, String reason) {
+        publishInventoryDeduction(orderId, ingredientId, quantity != null ? quantity.doubleValue() : 0.0, reason);
     }
     
     /**

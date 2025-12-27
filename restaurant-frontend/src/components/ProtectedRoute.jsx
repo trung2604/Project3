@@ -1,33 +1,50 @@
-import React from 'react';
-import { Navigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import Loading from './Common/Loading';
+import React from "react";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import Loading from "./Common/Loading";
 
 export function ProtectedRoute({ children }) {
-    const { isAuthenticated, loading } = useAuth();
+  let authContext;
+  try {
+    authContext = useAuth();
+  } catch (error) {
+    // If AuthContext is not available, show loading
+    console.error("AuthContext error:", error);
+    return <Loading fullScreen tip="Đang khởi tạo..." />;
+  }
 
-    if (loading) {
-        return <Loading fullScreen tip="Đang kiểm tra đăng nhập..." />;
-    }
+  const { isAuthenticated, loading } = authContext;
 
-    if (!isAuthenticated()) {
-        return <Navigate to="/" replace />;
-    }
+  if (loading) {
+    return <Loading fullScreen tip="Đang kiểm tra đăng nhập..." />;
+  }
 
-    return children;
+  if (!isAuthenticated()) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
 }
 
 export function PublicRoute({ children }) {
-    const { isAuthenticated, loading } = useAuth();
+  let authContext;
+  try {
+    authContext = useAuth();
+  } catch (error) {
+    // If AuthContext is not available, show loading
+    console.error("AuthContext error:", error);
+    return <Loading fullScreen tip="Đang khởi tạo..." />;
+  }
 
-    if (loading) {
-        return <Loading fullScreen tip="Đang kiểm tra đăng nhập..." />;
-    }
+  const { isAuthenticated, loading } = authContext;
 
-    if (isAuthenticated()) {
-        return <Navigate to="/dashboard" replace />;
-    }
+  if (loading) {
+    return <Loading fullScreen tip="Đang kiểm tra đăng nhập..." />;
+  }
 
-    return children;
+  if (isAuthenticated()) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
 }
-

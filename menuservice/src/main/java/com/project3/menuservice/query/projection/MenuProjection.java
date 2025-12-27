@@ -1,6 +1,8 @@
 package com.project3.menuservice.query.projection;
 
 import com.project3.menuservice.command.entity.MenuItem;
+import com.project3.menuservice.command.entity.MenuItemIngredient;
+import com.project3.menuservice.command.entity.MenuItemIngredientRepository;
 import com.project3.menuservice.command.entity.MenuItemRepository;
 import com.project3.menuservice.query.dto.MenuItemResponse;
 import com.project3.menuservice.query.dto.PagedMenuItemResponse;
@@ -22,6 +24,9 @@ public class MenuProjection {
 
     @Autowired
     private MenuItemRepository menuItemRepository;
+    
+    @Autowired
+    private MenuItemIngredientRepository menuItemIngredientRepository;
 
     @QueryHandler
     @Transactional(readOnly = true)
@@ -29,8 +34,6 @@ public class MenuProjection {
         int page = query.getPage() != null ? query.getPage() : 0;
         int size = query.getSize() != null ? query.getSize() : 20;
 
-        // For native query, don't use Sort in Pageable to avoid column name issues
-        // Sorting will be handled by default ORDER BY in query
         Pageable pageable = PageRequest.of(page, size);
         
         Page<MenuItem> menuItemPage = menuItemRepository.findByFilters(
@@ -44,9 +47,23 @@ public class MenuProjection {
 
         List<MenuItemResponse> result = new ArrayList<>();
         for (MenuItem item : menuItemPage.getContent()) {
-            // Load ingredients separately to avoid serialization issues
-            MenuItem fullItem = menuItemRepository.findWithDetailsById(item.getMenuItemId()).orElse(item);
-            result.add(MenuItemResponse.fromEntity(fullItem));
+            List<MenuItemIngredient> ingredients = menuItemIngredientRepository.findByMenuItemId(item.getMenuItemId());
+            
+            // Set the fetched ingredients to the menu item and ensure bidirectional relationship
+            if (item.getMenuItemIngredients() == null) {
+                item.setMenuItemIngredients(new ArrayList<>());
+            }
+            item.getMenuItemIngredients().clear();
+            // Set menuItem reference for each ingredient to ensure proper relationship
+            if (ingredients != null) {
+                for (MenuItemIngredient ingredient : ingredients) {
+                    ingredient.setMenuItem(item); // Ensure bidirectional relationship
+                }
+                item.getMenuItemIngredients().addAll(ingredients);
+            }
+            
+            MenuItemResponse response = MenuItemResponse.fromEntity(item);
+            result.add(response);
         }
 
         return new PagedMenuItemResponse(
@@ -63,6 +80,19 @@ public class MenuProjection {
     public MenuItemResponse getById(GetMenuItemByIdQuery query) {
         MenuItem item = menuItemRepository.findWithDetailsById(query.getMenuItemId())
                 .orElseThrow(() -> new RuntimeException("Menu item not found"));
+        
+        List<MenuItemIngredient> ingredients = menuItemIngredientRepository.findByMenuItemId(query.getMenuItemId());
+        if (item.getMenuItemIngredients() == null) {
+            item.setMenuItemIngredients(new ArrayList<>());
+        }
+        item.getMenuItemIngredients().clear();
+        if (ingredients != null) {
+            for (MenuItemIngredient ingredient : ingredients) {
+                ingredient.setMenuItem(item);
+            }
+            item.getMenuItemIngredients().addAll(ingredients);
+        }
+        
         return MenuItemResponse.fromEntity(item);
     }
 }

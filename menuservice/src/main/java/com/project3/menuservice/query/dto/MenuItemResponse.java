@@ -14,8 +14,8 @@ import java.util.List;
 public class MenuItemResponse {
     private String menuItemId;
     private String name;
-    private String categoryId; // Changed from category to categoryId
-    private String categoryName; // Added category name for display
+    private String categoryId;
+    private String categoryName;
     private String description;
     private Double price;
     private Boolean active;
@@ -24,6 +24,7 @@ public class MenuItemResponse {
     private Integer preparationTime;
     private String recipe;
     private List<String> ingredients;
+    private List<MenuItemIngredientDTO> ingredientDetails;
 
     public static MenuItemResponse fromEntity(MenuItem item) {
         if (item == null) return null;
@@ -38,12 +39,37 @@ public class MenuItemResponse {
         dto.setPreparationTime(item.getPreparationTime());
         dto.setRecipe(item.getRecipe());
         
-        // Safely handle ingredients to avoid lazy loading issues
         try {
-            dto.setIngredients(new ArrayList<>(item.getIngredients()));
+            if (item.getMenuItemIngredients() != null && !item.getMenuItemIngredients().isEmpty()) {
+                List<MenuItemIngredientDTO> ingredientDetailsList = new ArrayList<>();
+                List<String> legacyIngredientIds = new ArrayList<>();
+                
+                for (com.project3.menuservice.command.entity.MenuItemIngredient miIngredient : item.getMenuItemIngredients()) {
+                    MenuItemIngredientDTO dtoItem = new MenuItemIngredientDTO();
+                    dtoItem.setIngredientId(miIngredient.getIngredientId());
+                    dtoItem.setQuantity(miIngredient.getQuantity());
+                    dtoItem.setUnit(miIngredient.getUnit());
+                    dtoItem.setNotes(miIngredient.getNotes());
+                    ingredientDetailsList.add(dtoItem);
+                    legacyIngredientIds.add(miIngredient.getIngredientId());
+                }
+                dto.setIngredientDetails(ingredientDetailsList);
+                dto.setIngredients(legacyIngredientIds);
+            } else {
+                dto.setIngredientDetails(new ArrayList<>());
+                try {
+                    dto.setIngredients(new ArrayList<>(item.getIngredients()));
+                } catch (Exception e) {
+                    dto.setIngredients(new ArrayList<>());
+                }
+            }
         } catch (Exception e) {
-            // If lazy loading fails, set empty list
-            dto.setIngredients(new ArrayList<>());
+            dto.setIngredientDetails(new ArrayList<>());
+            try {
+                dto.setIngredients(new ArrayList<>(item.getIngredients()));
+            } catch (Exception e2) {
+                dto.setIngredients(new ArrayList<>());
+            }
         }
         
         if (item.getCategory() != null) {

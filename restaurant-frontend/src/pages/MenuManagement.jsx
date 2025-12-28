@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Card,
   Table,
@@ -75,6 +75,7 @@ const MenuManagement = () => {
   const [categories, setCategories] = useState([]);
   const [ingredients, setIngredients] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: PAGINATION.DEFAULT_PAGE_SIZE,
@@ -93,50 +94,49 @@ const MenuManagement = () => {
   const [imagePreview, setImagePreview] = useState(null);
   const [formInitialValues, setFormInitialValues] = useState({});
 
+  const canManage = canManageMenu(role);
+
   // Load menu items data
-  const loadMenuItems = async (
-    page = 1,
-    size = PAGINATION.DEFAULT_PAGE_SIZE
-  ) => {
-    setLoading(true);
-    try {
-      const params = {
-        page: page - 1, // Backend uses 0-based pagination
-        size,
-        // Only include non-empty filters
-        ...(filters.categoryId &&
-          filters.categoryId.trim() !== "" && {
-            categoryId: filters.categoryId,
-          }),
-        ...(filters.active !== null &&
-          filters.active !== undefined && { active: filters.active }),
-        ...(filters.search &&
-          filters.search.trim() !== "" && { search: filters.search }),
-      };
+  const loadMenuItems = useCallback(
+    async (page = 1, size = PAGINATION.DEFAULT_PAGE_SIZE) => {
+      setLoading(true);
+      try {
+        const params = {
+          page: page - 1,
+          size,
+          ...(filters.categoryId &&
+            filters.categoryId.trim() !== "" && {
+              categoryId: filters.categoryId,
+            }),
+          ...(filters.active !== null &&
+            filters.active !== undefined && { active: filters.active }),
+          ...(filters.search &&
+            filters.search.trim() !== "" && { search: filters.search }),
+        };
 
-      const response = await apiService.menu.getMenuItems(params);
-      // Response interceptor đã extract data, response là PagedMenuItemResponse trực tiếp
-      const items = response?.items || [];
+        const response = await apiService.menu.getMenuItems(params);
+        const items = response?.items || [];
 
-      setMenuItems(items);
-      setPagination((prev) => ({
-        ...prev,
-        current: page,
-        total: response?.totalElements || 0,
-      }));
-    } catch (error) {
-      message.error("Lỗi khi tải dữ liệu món ăn");
-      console.error("Error loading menu items:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+        setMenuItems(items);
+        setPagination((prev) => ({
+          ...prev,
+          current: page,
+          total: response?.totalElements || 0,
+        }));
+      } catch (error) {
+        message.error("Lỗi khi tải dữ liệu món ăn");
+        console.error("Error loading menu items:", error);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [filters]
+  );
 
   // Load categories
   const loadCategories = async () => {
     try {
       const response = await apiService.menu.getCategories();
-      // Response interceptor đã extract data, response là list trực tiếp
       setCategories(Array.isArray(response) ? response : []);
     } catch (error) {
       console.error("Error loading categories:", error);
@@ -149,11 +149,8 @@ const MenuManagement = () => {
       const response = await apiService.inventory.getIngredients({
         size: 1000,
       });
-      // Response interceptor đã extract data, response là PagedIngredientResponse trực tiếp
       setIngredients(response?.ingredients || []);
     } catch (error) {
-      // Only log error, don't show message if it's a permission error
-      // User might not have permission to view ingredients
       if (error.response?.status !== 403) {
         console.error("Error loading ingredients:", error);
       }
@@ -162,12 +159,22 @@ const MenuManagement = () => {
 
   useEffect(() => {
     loadCategories();
+    if (canManage) {
+      apiService.cloudinary.prefetchSignature();
+    }
   }, []);
 
+  // Reload menu items when filters or pagination changes
   useEffect(() => {
-    loadMenuItems();
-    loadIngredients();
-  }, [filters]);
+    loadMenuItems(pagination.current, pagination.pageSize);
+  }, [filters, pagination.current, pagination.pageSize, loadMenuItems]);
+
+  // Load ingredients when canManage changes
+  useEffect(() => {
+    if (canManage) {
+      loadIngredients();
+    }
+  }, [canManage]);
 
   // Listen to category changes to reload categories
   useEffect(() => {
@@ -211,7 +218,7 @@ const MenuManagement = () => {
     };
   }, []);
 
-  // Listen to menu item changes to reload menu items
+  // Listen to menu item changes from other components
   useEffect(() => {
     const eventNames = [
       DATA_REFRESH_EVENTS.MENU_ITEM_CREATED,
@@ -221,23 +228,22 @@ const MenuManagement = () => {
     const cleanupFunctions = [];
 
     eventNames.forEach((eventName) => {
-      const cleanup = listenToDataRefresh(eventName, () => {
+      const handler = () => {
         loadMenuItems(pagination.current, pagination.pageSize);
-      });
+      };
+      const cleanup = listenToDataRefresh(eventName, handler);
       cleanupFunctions.push(cleanup);
     });
 
     return () => {
       cleanupFunctions.forEach((cleanup) => cleanup());
     };
-  }, [pagination.current, pagination.pageSize]);
+  }, [loadMenuItems, pagination.current, pagination.pageSize]);
 
-  // Set form initial values for ingredients modal when modal opens and selectedMenuItem changes
   useEffect(() => {
     if (modalVisible && modalType === "ingredients" && selectedMenuItem) {
       let ingredientsData = [];
 
-      // Prioritize ingredientDetails (new format with quantities)
       if (
         selectedMenuItem.ingredientDetails &&
         selectedMenuItem.ingredientDetails.length > 0
@@ -252,7 +258,6 @@ const MenuManagement = () => {
         selectedMenuItem.ingredients &&
         selectedMenuItem.ingredients.length > 0
       ) {
-        // Legacy format: convert to new format with default quantity 1
         ingredientsData = selectedMenuItem.ingredients.map((ingredientId) => ({
           ingredientId: ingredientId,
           quantity: 1,
@@ -271,9 +276,7 @@ const MenuManagement = () => {
             form.setFieldsValue({
               ingredients: ingredientsData,
             });
-          } catch (error) {
-            // Form might not be ready yet
-          }
+          } catch (error) {}
         }
       }, 100);
 
@@ -281,19 +284,15 @@ const MenuManagement = () => {
     } else if (!modalVisible) {
       try {
         form.resetFields();
-      } catch (error) {
-        // Form might not be mounted yet
-      }
+      } catch (error) {}
       setFormInitialValues({});
     }
   }, [modalVisible, modalType, selectedMenuItem, form]);
 
-  // Handle table changes
   const handleTableChange = (paginationInfo) => {
     loadMenuItems(paginationInfo.current, paginationInfo.pageSize);
   };
 
-  // Handle search and filters
   const handleSearch = (value) => {
     setFilters((prev) => ({ ...prev, search: value }));
   };
@@ -302,17 +301,14 @@ const MenuManagement = () => {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
-  // Modal handlers
   const showModal = (type, menuItem = null) => {
     setModalType(type);
     setSelectedMenuItem(menuItem);
     setModalVisible(true);
 
     if (type === "edit" && menuItem) {
-      // Reset form first to clear any initialValues
       form.resetFields();
 
-      // Prepare form values - ensure all fields are explicitly set with proper defaults
       const formValues = {
         name: menuItem.name || "",
         description: menuItem.description || "",
@@ -333,19 +329,9 @@ const MenuManagement = () => {
         imageUrl: menuItem.imageUrl || "",
         imagePublicId: menuItem.imagePublicId || "",
       };
-
-      // Use setTimeout to ensure modal and form are fully rendered
-      // Wait for categories to be available and form to be mounted
       setTimeout(() => {
-        // Set all form values
         form.setFieldsValue(formValues);
-
-        // Force update to ensure all fields are rendered
-        form.validateFields().catch(() => {
-          // Ignore validation errors, we just want to trigger a re-render
-        });
-
-        // Set image preview
+        form.validateFields().catch(() => {});
         if (menuItem.imageUrl) {
           setImagePreview(menuItem.imageUrl);
         } else {
@@ -353,7 +339,6 @@ const MenuManagement = () => {
         }
       }, 150);
     } else if (type === "ingredients" && menuItem) {
-      // Use menuItem from state directly (already has latest data after reload)
       let ingredientsData = [];
 
       if (menuItem.ingredientDetails && menuItem.ingredientDetails.length > 0) {
@@ -372,12 +357,10 @@ const MenuManagement = () => {
         }));
       }
 
-      // Set initial values for Form (will be used when Form mounts)
       setFormInitialValues({
         ingredients: ingredientsData,
       });
 
-      // Also reset form to clear any previous values
       form.resetFields();
 
       setImagePreview(null);
@@ -407,7 +390,6 @@ const MenuManagement = () => {
         message.success("Tạo món ăn thành công");
         dispatchDataRefresh(DATA_REFRESH_EVENTS.MENU_ITEM_CREATED, payload);
       } else if (modalType === "edit") {
-        // Ensure imageUrl is preserved if not changed
         if (!payload.imageUrl && selectedMenuItem?.imageUrl) {
           payload.imageUrl = selectedMenuItem.imageUrl;
           payload.imagePublicId = selectedMenuItem.imagePublicId;
@@ -422,7 +404,6 @@ const MenuManagement = () => {
           menuItemId: selectedMenuItem.menuItemId,
         });
       } else if (modalType === "ingredients") {
-        // Format ingredients with quantities for API
         const ingredientsWithQuantity = values.ingredients.map((item) => ({
           ingredientId: item.ingredientId,
           quantity: item.quantity,
@@ -436,12 +417,10 @@ const MenuManagement = () => {
         );
         message.success("Cập nhật nguyên liệu thành công");
 
-        // Dispatch event to trigger reload
         dispatchDataRefresh(DATA_REFRESH_EVENTS.MENU_ITEM_UPDATED, {
           menuItemId: selectedMenuItem.menuItemId,
         });
 
-        // Reload menu items to get updated ingredient data
         loadMenuItems(pagination.current, pagination.pageSize);
       }
 
@@ -449,7 +428,6 @@ const MenuManagement = () => {
       form.resetFields();
       setImagePreview(null);
 
-      // Reload menu items for all modal types
       if (modalType !== "ingredients") {
         loadMenuItems(pagination.current, pagination.pageSize);
       }
@@ -488,6 +466,48 @@ const MenuManagement = () => {
     }
   };
 
+  // Delete multiple menu items
+  const handleDeleteMultiple = async () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning("Vui lòng chọn ít nhất một món ăn để xóa");
+      return;
+    }
+
+    Modal.confirm({
+      title: "Xác nhận xóa",
+      content: `Bạn có chắc chắn muốn xóa ${selectedRowKeys.length} món ăn đã chọn?`,
+      okText: "Xóa",
+      okType: "danger",
+      cancelText: "Hủy",
+      onOk: async () => {
+        try {
+          setLoading(true);
+          const deletePromises = selectedRowKeys.map((id) =>
+            apiService.menu.deleteMenuItem(id)
+          );
+          await Promise.all(deletePromises);
+
+          message.success(`Đã xóa thành công ${selectedRowKeys.length} món ăn`);
+
+          // Dispatch events for each deleted item
+          selectedRowKeys.forEach((id) => {
+            dispatchDataRefresh(DATA_REFRESH_EVENTS.MENU_ITEM_DELETED, {
+              menuItemId: id,
+            });
+          });
+
+          setSelectedRowKeys([]);
+          loadMenuItems(pagination.current, pagination.pageSize);
+        } catch (error) {
+          message.error("Có lỗi xảy ra khi xóa món ăn");
+          console.error("Error deleting menu items:", error);
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
+  };
+
   // Update price
   const handleUpdatePrice = async (id, price) => {
     try {
@@ -499,11 +519,30 @@ const MenuManagement = () => {
     }
   };
 
-  // Handle image upload
+  // Handle image upload with progress
   const handleImageUpload = async (file) => {
     setUploading(true);
     try {
-      const result = await apiService.cloudinary.uploadImage(file);
+      // Validate image first
+      const { validateImage } = await import("../utils/imageOptimizer");
+      const validation = validateImage(file, 5); // Max 5MB
+      if (!validation.valid) {
+        message.error(validation.error);
+        setUploading(false);
+        return false;
+      }
+
+      const result = await apiService.cloudinary.uploadImage(
+        file,
+        "restaurant-menu",
+        {
+          onProgress: (progress) => {
+            // You can show progress here if needed
+            // console.log(`Upload progress: ${progress}%`);
+          },
+          compress: true, // Enable compression
+        }
+      );
 
       form.setFieldsValue({
         imageUrl: result.url,
@@ -514,7 +553,9 @@ const MenuManagement = () => {
       return false; // Prevent default upload
     } catch (error) {
       console.error("Upload error:", error);
-      message.error("Lỗi khi upload ảnh: " + error.message);
+      message.error(
+        "Lỗi khi upload ảnh: " + (error.message || "Vui lòng thử lại")
+      );
       return false;
     } finally {
       setUploading(false);
@@ -578,13 +619,11 @@ const MenuManagement = () => {
           </div>
           <div style={{ fontSize: "12px", color: "#999", marginTop: "2px" }}>
             {(() => {
-              // Get ingredient names
               let ingredientNames = [];
               if (
                 record.ingredientDetails &&
                 record.ingredientDetails.length > 0
               ) {
-                // New format: get names from ingredientDetails
                 ingredientNames = record.ingredientDetails.map((detail) => {
                   const ingredient = ingredients.find(
                     (ing) => ing.ingredientId === detail.ingredientId
@@ -592,7 +631,6 @@ const MenuManagement = () => {
                   return ingredient ? ingredient.name : detail.ingredientId;
                 });
               } else if (record.ingredients && record.ingredients.length > 0) {
-                // Legacy format: get names from ingredients array
                 ingredientNames = record.ingredients.map((ingredientId) => {
                   const ingredient = ingredients.find(
                     (ing) => ing.ingredientId === ingredientId
@@ -605,14 +643,7 @@ const MenuManagement = () => {
                 return "Chưa có nguyên liệu";
               }
 
-              // Display ingredient names, max 2 lines
-              if (ingredientNames.length <= 2) {
-                return ingredientNames.join(", ");
-              } else {
-                return `${ingredientNames.slice(0, 2).join(", ")} +${
-                  ingredientNames.length - 2
-                }`;
-              }
+              return ingredientNames.join(", ");
             })()}
           </div>
         </div>
@@ -782,15 +813,7 @@ const MenuManagement = () => {
                             value={ingredient.ingredientId}
                             label={ingredient.name}
                           >
-                            <div>
-                              <div className="font-medium">
-                                {ingredient.name}
-                              </div>
-                              <div className="text-sm text-gray-500">
-                                Tồn kho: {ingredient.currentStock}{" "}
-                                {ingredient.unit}
-                              </div>
-                            </div>
+                            {ingredient.name}
                           </Option>
                         ))}
                       </Select>
@@ -1106,6 +1129,23 @@ const MenuManagement = () => {
             </Button>
           </Col>
         </Row>
+        {selectedRowKeys.length > 0 && (
+          <Row style={{ marginTop: 16 }}>
+            <Col span={24}>
+              <Space>
+                <span>Đã chọn: {selectedRowKeys.length} món ăn</span>
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={handleDeleteMultiple}
+                >
+                  Xóa đã chọn ({selectedRowKeys.length})
+                </Button>
+                <Button onClick={() => setSelectedRowKeys([])}>Bỏ chọn</Button>
+              </Space>
+            </Col>
+          </Row>
+        )}
       </Card>
 
       {/* Table */}
@@ -1115,6 +1155,13 @@ const MenuManagement = () => {
           dataSource={menuItems}
           rowKey="menuItemId"
           loading={loading}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+            getCheckboxProps: (record) => ({
+              name: record.name,
+            }),
+          }}
           pagination={{
             ...pagination,
             showSizeChanger: true,

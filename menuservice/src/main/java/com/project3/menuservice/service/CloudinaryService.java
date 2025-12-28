@@ -26,10 +26,14 @@ public class CloudinaryService {
 
     /**
      * Generate signature for frontend upload
+     * @param folder - Cloudinary folder (default: "restaurant-menu")
      */
-    public Map<String, String> generateSignature() {
+    public Map<String, String> generateSignature(String folder) {
+        if (folder == null || folder.isEmpty()) {
+            folder = "restaurant-menu";
+        }
         long timestamp = System.currentTimeMillis() / 1000;
-        String signature = generateSignature(timestamp);
+        String signature = generateSignature(timestamp, folder);
         
         Map<String, String> result = new HashMap<>();
         result.put("apiKey", apiKey);
@@ -40,12 +44,20 @@ public class CloudinaryService {
     }
 
     /**
-     * Generate signature for specific timestamp
+     * Generate signature for frontend upload (default folder)
      */
-    private String generateSignature(long timestamp) {
+    public Map<String, String> generateSignature() {
+        return generateSignature("restaurant-menu");
+    }
+
+    /**
+     * Generate signature for specific timestamp and folder
+     * Parameters must be sorted alphabetically for Cloudinary signature
+     */
+    private String generateSignature(long timestamp, String folder) {
         // For upload, we need to include all parameters in signature
-        // Parameters must be sorted alphabetically
-        String toSign = "folder=restaurant-menu&timestamp=" + timestamp + apiSecret;
+        // Parameters must be sorted alphabetically: folder comes before timestamp
+        String toSign = "folder=" + folder + "&timestamp=" + timestamp + apiSecret;
         String signature = org.apache.commons.codec.digest.DigestUtils.sha1Hex(toSign);
         return signature;
     }

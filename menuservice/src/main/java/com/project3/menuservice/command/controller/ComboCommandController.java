@@ -2,9 +2,12 @@ package com.project3.menuservice.command.controller;
 
 import com.project3.commonservice.dto.ApiResponseDTO;
 import com.project3.menuservice.command.commands.*;
+import com.project3.menuservice.command.entity.Combo;
+import com.project3.menuservice.command.entity.ComboRepository;
 import com.project3.menuservice.util.IdGenerator;
 import lombok.extern.slf4j.Slf4j;
 import org.axonframework.commandhandling.gateway.CommandGateway;
+import org.axonframework.modelling.command.AggregateNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +20,9 @@ public class ComboCommandController extends BaseMenuController {
 
     @Autowired
     private CommandGateway commandGateway;
+
+    @Autowired
+    private ComboRepository comboRepository;
 
     @PostMapping
     public ResponseEntity<ApiResponseDTO<String>> create(@RequestBody CreateComboCommand cmd) {
@@ -87,9 +93,58 @@ public class ComboCommandController extends BaseMenuController {
             DeleteComboCommand cmd = new DeleteComboCommand(id);
             String result = commandGateway.sendAndWait(cmd);
             return ResponseEntity.ok(ApiResponseDTO.success(result, "Combo deleted successfully"));
+        } catch (AggregateNotFoundException e) {
+            log.warn("Aggregate not found in event store for combo {}, attempting to rebuild from read model: {}", id, e.getMessage());
+            return handleAggregateNotFoundForDelete(id);
         } catch (Exception e) {
+            // Check if the exception or its cause contains "aggregate" and "not found" in the message
+            if (isAggregateNotFound(e)) {
+                String errorMessage = e.getMessage();
+                log.warn("Aggregate not found in event store for combo {} (wrapped exception), attempting to rebuild: {}", id, errorMessage);
+                return handleAggregateNotFoundForDelete(id);
+            }
             log.error("Error deleting combo {}: {}", id, e.getMessage(), e);
             return badRequest("Failed to delete combo: " + e.getMessage());
+        }
+    }
+    
+    private ResponseEntity<ApiResponseDTO<String>> handleAggregateNotFoundForDelete(String id) {
+        Combo combo = comboRepository.findById(id).orElse(null);
+        if (combo == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponseDTO.error("Combo not found in event store: " + id + ". The combo may have been deleted or never existed.", 404));
+        }
+        
+        try {
+            log.info("Rebuilding combo aggregate {} from read model before deletion", id);
+            CreateComboCommand createCmd = new CreateComboCommand();
+            createCmd.setComboId(combo.getComboId());
+            createCmd.setName(combo.getName());
+            createCmd.setDescription(combo.getDescription());
+            createCmd.setPrice(combo.getPrice());
+            createCmd.setDiscount(combo.getDiscount());
+            createCmd.setMenuItemIds(combo.getMenuItemIds() != null ? new java.util.ArrayList<>(combo.getMenuItemIds()) : new java.util.ArrayList<>());
+            createCmd.setActive(combo.getActive());
+            createCmd.setImageUrl(combo.getImageUrl());
+            createCmd.setImagePublicId(combo.getImagePublicId());
+            
+            commandGateway.sendAndWait(createCmd);
+            log.info("Successfully rebuilt combo aggregate {} from read model", id);
+
+            DeleteComboCommand deleteCmd = new DeleteComboCommand(id);
+            String result = commandGateway.sendAndWait(deleteCmd);
+            return ResponseEntity.ok(ApiResponseDTO.success(result, "Combo deleted successfully (rebuilt from read model first)"));
+        } catch (Exception rebuildError) {
+            log.error("Error rebuilding combo aggregate {} from read model: {}", id, rebuildError.getMessage(), rebuildError);
+            try {
+                comboRepository.deleteById(id);
+                log.warn("Deleted combo {} directly from read model as fallback", id);
+                return ResponseEntity.ok(ApiResponseDTO.success(id, "Combo deleted from read model (aggregate rebuild failed)"));
+            } catch (Exception deleteError) {
+                log.error("Error deleting combo {} from read model: {}", id, deleteError.getMessage(), deleteError);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(ApiResponseDTO.error("Failed to delete combo: " + deleteError.getMessage(), 500));
+            }
         }
     }
 }

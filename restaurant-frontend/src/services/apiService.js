@@ -480,35 +480,107 @@ const dashboardAPI = {
 
 const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dswb2h4ny/image/upload";
 
+let signatureCache = null;
+let signatureCacheTime = 0;
+const SIGNATURE_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
 const cloudinaryAPI = {
-  async getSignature() {
+  async getSignature(forceRefresh = false, folder = "restaurant-menu") {
     try {
-      return await apiClient.get(API_ENDPOINTS.CLOUDINARY.SIGNATURE);
+      // Return cached signature if still valid and same folder
+      const now = Date.now();
+      if (
+        !forceRefresh &&
+        signatureCache &&
+        signatureCache.folder === folder &&
+        now - signatureCacheTime < SIGNATURE_CACHE_DURATION
+      ) {
+        // Return signature without folder field
+        const { folder: _, ...signature } = signatureCache;
+        return signature;
+      }
+
+      const signature = await apiClient.get(
+        API_ENDPOINTS.CLOUDINARY.SIGNATURE,
+        {
+          params: { folder },
+        }
+      );
+
+      // Cache the signature with folder info for cache key matching
+      signatureCache = { ...signature, folder };
+      signatureCacheTime = now;
+
+      // Return signature without folder (Cloudinary doesn't need it in response)
+      return signature;
     } catch (error) {
       console.error("Error getting signature:", error);
       throw error;
     }
   },
 
-  async uploadImage(file, folder = "restaurant-menu") {
+  /**
+   * Upload image to Cloudinary with optimization
+   * @param {File} file - Image file to upload
+   * @param {string} folder - Cloudinary folder (default: "restaurant-menu")
+   * @param {Object} options - Upload options
+   * @param {Function} onProgress - Progress callback (progress: 0-100)
+   * @param {boolean} compress - Whether to compress image (default: true)
+   * @returns {Promise<{url: string, publicId: string}>}
+   */
+  async uploadImage(file, folder = "restaurant-menu", options = {}) {
+    const { onProgress, compress = true } = options;
+
     try {
-      const signature = await this.getSignature();
+      // Pre-fetch signature in parallel with compression (if enabled)
+      const signaturePromise = this.getSignature(false, folder);
+
+      // Compress image if enabled
+      let fileToUpload = file;
+      if (compress) {
+        try {
+          const { compressImage } = await import("../utils/imageOptimizer");
+          fileToUpload = await compressImage(file, 1920, 1920, 0.8);
+        } catch (compressionError) {
+          console.warn(
+            "Image compression failed, using original:",
+            compressionError
+          );
+          // Continue with original file if compression fails
+        }
+      }
+
+      // Wait for signature
+      const signature = await signaturePromise;
 
       if (!signature.apiKey || !signature.timestamp || !signature.signature) {
         throw new Error("Invalid signature data from backend");
       }
 
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", fileToUpload);
       formData.append("api_key", signature.apiKey);
       formData.append("timestamp", signature.timestamp);
       formData.append("signature", signature.signature);
       formData.append("folder", folder);
 
+      // Add optimization parameters (Cloudinary will auto-optimize)
+      // Note: transformations should be in signature if using signed upload
+      // For now, we rely on client-side compression and Cloudinary's auto-optimization
+
       const response = await axios.post(CLOUDINARY_URL, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
+        onUploadProgress: (progressEvent) => {
+          if (onProgress && progressEvent.total) {
+            const percentCompleted = Math.round(
+              (progressEvent.loaded * 100) / progressEvent.total
+            );
+            onProgress(percentCompleted);
+          }
+        },
+        timeout: 60000, // 60 seconds timeout for large files
       });
 
       return {
@@ -518,13 +590,47 @@ const cloudinaryAPI = {
         public_id: response.data.public_id,
       };
     } catch (error) {
+      // If signature error, try refreshing cache and retry once
+      if (
+        error.response?.status === 401 ||
+        error.message?.includes("signature")
+      ) {
+        signatureCache = null; // Clear cache
+        signatureCacheTime = 0;
+
+        // Retry once with fresh signature
+        if (!options.retried) {
+          return this.uploadImage(file, folder, { ...options, retried: true });
+        }
+      }
+
       console.error("Error uploading image:", error);
       throw error;
     }
   },
 
-  async uploadUserAvatar(file) {
-    return this.uploadImage(file, "restaurant-users");
+  async uploadUserAvatar(file, onProgress) {
+    return this.uploadImage(file, "restaurant-users", { onProgress });
+  },
+
+  /**
+   * Pre-fetch signature to reduce latency when user selects file
+   */
+  async prefetchSignature() {
+    try {
+      await this.getSignature();
+    } catch (error) {
+      // Silently fail - signature will be fetched when needed
+      console.warn("Failed to prefetch signature:", error);
+    }
+  },
+
+  /**
+   * Clear signature cache (useful for testing or forced refresh)
+   */
+  clearSignatureCache() {
+    signatureCache = null;
+    signatureCacheTime = 0;
   },
 };
 

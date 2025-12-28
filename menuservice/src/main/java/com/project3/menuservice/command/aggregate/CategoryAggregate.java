@@ -12,6 +12,7 @@ import org.axonframework.spring.stereotype.Aggregate;
 import org.springframework.beans.BeanUtils;
 
 import static org.axonframework.modelling.command.AggregateLifecycle.apply;
+import static org.axonframework.modelling.command.AggregateLifecycle.markDeleted;
 
 @Data
 @NoArgsConstructor
@@ -69,12 +70,15 @@ public class CategoryAggregate {
 
     @CommandHandler
     public void handle(DeleteCategoryCommand command) {
+        // Mark aggregate as deleted - this prevents further commands on this aggregate
+        markDeleted();
         CategoryDeletedEvent event = new CategoryDeletedEvent(command.getCategoryId());
         apply(event);
     }
 
     @EventSourcingHandler
     public void on(CategoryDeletedEvent event) {
-        this.active = false;
+        // Aggregate is marked as deleted, no need to update state
+        // The event handler in MenuEventHandler will handle the actual deletion from read model
     }
 }

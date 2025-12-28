@@ -179,6 +179,26 @@ const OrderManagement = () => {
     };
   }, [canManage]);
 
+  useEffect(() => {
+    const eventNames = [
+      DATA_REFRESH_EVENTS.ORDER_CREATED,
+      DATA_REFRESH_EVENTS.ORDER_UPDATED,
+      DATA_REFRESH_EVENTS.ORDER_CANCELLED,
+    ];
+    const cleanupFunctions = [];
+
+    eventNames.forEach((eventName) => {
+      const cleanup = listenToDataRefresh(eventName, () => {
+        loadOrders();
+      });
+      cleanupFunctions.push(cleanup);
+    });
+
+    return () => {
+      cleanupFunctions.forEach((cleanup) => cleanup());
+    };
+  }, []);
+
   const loadOrders = async () => {
     const token = localStorage.getItem("accessToken");
     if (!token) {
@@ -337,7 +357,7 @@ const OrderManagement = () => {
 
   const handleCancelOrder = async (orderId, reason) => {
     try {
-      await apiService.order.cancelOrder(orderId, reason, canManage);
+      await apiService.order.cancelOrder(orderId, reason, true);
       antdMessage.success("Hủy đơn hàng thành công");
       dispatchDataRefresh(DATA_REFRESH_EVENTS.ORDER_CANCELLED, {
         orderId,
@@ -346,7 +366,11 @@ const OrderManagement = () => {
       loadOrders();
     } catch (error) {
       console.error("Error cancelling order:", error);
-      antdMessage.error("Không thể hủy đơn hàng");
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
+        "Không thể hủy đơn hàng";
+      antdMessage.error(errorMessage);
     }
   };
 

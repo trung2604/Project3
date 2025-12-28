@@ -24,6 +24,8 @@ public class Combo {
     private Double price;
     private Double discount;
     private Boolean active;
+    private String imageUrl;
+    private String imagePublicId; // Cloudinary public ID for deletion
 
     @ElementCollection
     private List<String> menuItemIds = new ArrayList<>();

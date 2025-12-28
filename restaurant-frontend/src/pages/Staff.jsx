@@ -41,6 +41,7 @@ import ErrorPage from "../components/Common/ErrorPage";
 import dayjs from "dayjs";
 import {
   dispatchDataRefresh,
+  listenToDataRefresh,
   DATA_REFRESH_EVENTS,
 } from "../utils/dataRefreshEvents";
 
@@ -120,6 +121,27 @@ const Staff = () => {
   useEffect(() => {
     loadUsers();
   }, [filters]);
+
+  // Listen to user changes from other components
+  useEffect(() => {
+    const eventNames = [
+      DATA_REFRESH_EVENTS.USER_CREATED,
+      DATA_REFRESH_EVENTS.USER_UPDATED,
+      DATA_REFRESH_EVENTS.USER_DELETED,
+    ];
+    const cleanupFunctions = [];
+
+    eventNames.forEach((eventName) => {
+      const cleanup = listenToDataRefresh(eventName, () => {
+        loadUsers(pagination.current, pagination.pageSize);
+      });
+      cleanupFunctions.push(cleanup);
+    });
+
+    return () => {
+      cleanupFunctions.forEach((cleanup) => cleanup());
+    };
+  }, [pagination.current, pagination.pageSize]);
 
   // Handle table changes
   const handleTableChange = (paginationInfo) => {

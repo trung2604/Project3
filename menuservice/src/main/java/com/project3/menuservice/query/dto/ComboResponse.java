@@ -19,6 +19,8 @@ public class ComboResponse {
     private Double discount;
     private Boolean active;
     private List<String> menuItemIds;
+    private String imageUrl;
+    private String imagePublicId; // Cloudinary public ID for deletion
 
     public static ComboResponse fromEntity(Combo combo) {
         if (combo == null) return null;
@@ -30,6 +32,8 @@ public class ComboResponse {
         dto.setPrice(combo.getPrice());
         dto.setDiscount(combo.getDiscount());
         dto.setActive(combo.getActive());
+        dto.setImageUrl(combo.getImageUrl());
+        dto.setImagePublicId(combo.getImagePublicId());
         try {
             if (combo.getMenuItemIds() != null) {
                 dto.setMenuItemIds(new ArrayList<>(combo.getMenuItemIds()));

@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.axonframework.modelling.command.AggregateLifecycle.apply;
+import static org.axonframework.modelling.command.AggregateLifecycle.markDeleted;
 
 @Data
 @NoArgsConstructor
@@ -30,6 +31,8 @@ public class ComboAggregate {
     private Double discount;
     private List<String> menuItemIds = new ArrayList<>();
     private Boolean active;
+    private String imageUrl;
+    private String imagePublicId; // Cloudinary public ID for deletion
 
     @CommandHandler
     public ComboAggregate(CreateComboCommand command) {
@@ -47,6 +50,8 @@ public class ComboAggregate {
         this.discount = event.getDiscount();
         this.menuItemIds = event.getMenuItemIds() != null ? new ArrayList<>(event.getMenuItemIds()) : new ArrayList<>();
         this.active = event.getActive();
+        this.imageUrl = event.getImageUrl();
+        this.imagePublicId = event.getImagePublicId();
     }
 
     @CommandHandler
@@ -63,6 +68,8 @@ public class ComboAggregate {
         this.price = event.getPrice();
         this.discount = event.getDiscount();
         this.menuItemIds = event.getMenuItemIds() != null ? new ArrayList<>(event.getMenuItemIds()) : new ArrayList<>();
+        this.imageUrl = event.getImageUrl();
+        this.imagePublicId = event.getImagePublicId();
     }
 
     @CommandHandler
@@ -106,12 +113,15 @@ public class ComboAggregate {
 
     @CommandHandler
     public void handle(DeleteComboCommand command) {
+        // Mark aggregate as deleted - this prevents further commands on this aggregate
+        markDeleted();
         ComboDeletedEvent event = new ComboDeletedEvent(command.getComboId());
         apply(event);
     }
 
     @EventSourcingHandler
     public void on(ComboDeletedEvent event) {
-        this.active = false;
+        // Aggregate is marked as deleted, no need to update state
+        // The event handler in MenuEventHandler will handle the actual deletion from read model
     }
 }

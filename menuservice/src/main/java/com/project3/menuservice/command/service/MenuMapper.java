@@ -92,6 +92,8 @@ public class MenuMapper {
         combo.setDiscount(event.getDiscount());
         combo.setActive(Boolean.TRUE.equals(event.getActive()));
         combo.setMenuItemIds(event.getMenuItemIds() != null ? new ArrayList<>(event.getMenuItemIds()) : new ArrayList<>());
+        combo.setImageUrl(event.getImageUrl());
+        combo.setImagePublicId(event.getImagePublicId());
         return combo;
     }
     
@@ -103,6 +105,8 @@ public class MenuMapper {
         combo.setDescription(event.getDescription());
         combo.setPrice(event.getPrice());
         combo.setDiscount(event.getDiscount());
+        combo.setImageUrl(event.getImageUrl());
+        combo.setImagePublicId(event.getImagePublicId());
         
         // Update menu items using entity methods to ensure business logic is applied
         if (combo.getMenuItemIds() != null) {

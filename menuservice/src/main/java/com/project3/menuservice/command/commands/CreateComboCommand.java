@@ -19,4 +19,6 @@ public class CreateComboCommand {
     private Double discount; // percentage discount
     private List<String> menuItemIds; // list of menu items in combo
     private Boolean active;
+    private String imageUrl;
+    private String imagePublicId; // Cloudinary public ID for deletion
 }

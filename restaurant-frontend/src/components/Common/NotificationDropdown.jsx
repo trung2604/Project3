@@ -19,88 +19,118 @@ const NotificationDropdown = () => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [totalElements, setTotalElements] = useState(0);
 
-  const userId = user?.userId || user?.id || "admin"; // Fallback to 'admin' for now
+  const userId = user?.userId || user?.id || "admin";
 
-  // Handle new notification from WebSocket
   const handleNewNotification = useCallback((notification) => {
-    // Add new notification to the top of the list
     setNotifications((prev) => {
-      // Check if notification already exists (avoid duplicates)
       const exists = prev.some(
         (n) => n.notificationId === notification.notificationId
       );
       if (exists) {
         return prev;
       }
-      return [notification, ...prev].slice(0, 10); // Keep only latest 10
+      return [notification, ...prev].slice(0, 10);
     });
-
-    // Update unread count
     if (notification.status === "UNREAD") {
       setUnreadCount((prev) => prev + 1);
     }
   }, []);
 
-  // Handle unread count update from WebSocket
   const handleUnreadCountUpdate = useCallback((count) => {
     setUnreadCount(count);
   }, []);
 
-  // Use WebSocket hook for real-time notifications
   useWebSocketNotifications(handleNewNotification, handleUnreadCountUpdate);
 
   useEffect(() => {
     if (userId) {
       loadUnreadCount();
       if (dropdownVisible) {
-        loadNotifications();
+        // Reset pagination when dropdown opens
+        setPage(0);
+        setHasMore(true);
+        setNotifications([]);
+        loadNotifications(0, true);
       }
     }
   }, [userId, dropdownVisible]);
 
-  const loadNotifications = async () => {
-    setLoading(true);
+  const loadNotifications = async (pageNum = 0, reset = false) => {
+    if (reset) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+
     try {
       const data = await notificationAPI.getNotifications({
         userId: userId,
-        page: 0,
+        page: pageNum,
         size: 10,
       });
 
       let notificationsList = [];
+      let total = 0;
 
       if (data) {
-        if (data.notifications && Array.isArray(data.notifications)) {
-          notificationsList = data.notifications;
-        } else if (data.content && Array.isArray(data.content)) {
+        // Handle paginated response
+        if (data.content && Array.isArray(data.content)) {
           notificationsList = data.content;
-        } else if (Array.isArray(data)) {
-          notificationsList = data;
+          total = data.totalElements || data.total || 0;
         } else if (data.items && Array.isArray(data.items)) {
           notificationsList = data.items;
+          total = data.totalElements || data.total || 0;
+        } else if (data.notifications && Array.isArray(data.notifications)) {
+          notificationsList = data.notifications;
+          total = data.totalElements || data.total || notificationsList.length;
+        } else if (Array.isArray(data)) {
+          notificationsList = data;
+          total = data.length;
         } else if (data && typeof data === "object") {
           const keys = Object.keys(data);
           for (const key of keys) {
             if (Array.isArray(data[key])) {
               notificationsList = data[key];
+              total =
+                data.totalElements || data.total || notificationsList.length;
               break;
             }
           }
         }
       }
 
-      setNotifications(notificationsList);
+      if (reset) {
+        setNotifications(notificationsList);
+      } else {
+        setNotifications((prev) => [...prev, ...notificationsList]);
+      }
+
+      setTotalElements(total);
+      setHasMore(notificationsList.length === 10 && (pageNum + 1) * 10 < total);
+      setPage(pageNum);
     } catch (error) {
       console.error("Error loading notifications:", error);
       if (error.response?.status !== 401 && error.response?.status !== 403) {
         console.warn("Failed to load notifications:", error.message);
       }
+      setHasMore(false);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMoreNotifications = () => {
+    if (!loadingMore && hasMore) {
+      loadNotifications(page + 1, false);
     }
   };
 
@@ -179,7 +209,20 @@ const NotificationDropdown = () => {
     {
       key: "notifications",
       label: (
-        <div style={{ maxHeight: "400px", overflowY: "auto", width: "350px" }}>
+        <div
+          style={{ maxHeight: "400px", overflowY: "auto", width: "350px" }}
+          onScroll={(e) => {
+            const { scrollTop, scrollHeight, clientHeight } = e.target;
+            // Load more when scrolled to bottom (with 50px threshold)
+            if (
+              scrollHeight - scrollTop - clientHeight < 50 &&
+              hasMore &&
+              !loadingMore
+            ) {
+              loadMoreNotifications();
+            }
+          }}
+        >
           <div
             style={{
               padding: "12px 16px",
@@ -202,107 +245,131 @@ const NotificationDropdown = () => {
               style={{ padding: "20px" }}
             />
           ) : (
-            <List
-              dataSource={notifications}
-              renderItem={(notification) => (
-                <List.Item
-                  style={{
-                    padding: "12px 16px",
-                    borderBottom: "1px solid #f0f0f0",
-                    cursor: "pointer",
-                    backgroundColor:
-                      notification.status === "UNREAD" ? "#f0f9ff" : "white",
-                  }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedNotification(notification);
-                    setModalVisible(true);
-                    setDropdownVisible(false);
-                  }}
-                >
-                  <List.Item.Meta
-                    title={
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "start",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontWeight:
-                              notification.status === "UNREAD"
-                                ? "bold"
-                                : "normal",
-                          }}
-                        >
-                          {notification.title}
-                        </span>
-                        <div style={{ display: "flex", gap: "4px" }}>
-                          {notification.severity && (
-                            <Tag
-                              color={getSeverityColor(notification.severity)}
-                              size="small"
-                            >
-                              {notification.severity}
-                            </Tag>
-                          )}
-                          <Tag size="small">
-                            {getTypeLabel(notification.type)}
-                          </Tag>
-                        </div>
-                      </div>
-                    }
-                    description={
-                      <div>
-                        <div style={{ marginBottom: "4px" }}>
-                          {notification.message}
-                        </div>
+            <>
+              <List
+                dataSource={notifications}
+                renderItem={(notification) => (
+                  <List.Item
+                    style={{
+                      padding: "12px 16px",
+                      borderBottom: "1px solid #f0f0f0",
+                      cursor: "pointer",
+                      backgroundColor:
+                        notification.status === "UNREAD" ? "#f0f9ff" : "white",
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedNotification(notification);
+                      setModalVisible(true);
+                      setDropdownVisible(false);
+                    }}
+                  >
+                    <List.Item.Meta
+                      title={
                         <div
                           style={{
-                            fontSize: "12px",
-                            color: "#8c8c8c",
                             display: "flex",
                             justifyContent: "space-between",
-                            alignItems: "center",
+                            alignItems: "start",
                           }}
                         >
-                          <span>{dayjs(notification.createdAt).fromNow()}</span>
-                          <div onClick={(e) => e.stopPropagation()}>
-                            {notification.status === "UNREAD" && (
+                          <span
+                            style={{
+                              fontWeight:
+                                notification.status === "UNREAD"
+                                  ? "bold"
+                                  : "normal",
+                            }}
+                          >
+                            {notification.title}
+                          </span>
+                          <div style={{ display: "flex", gap: "4px" }}>
+                            {notification.severity && (
+                              <Tag
+                                color={getSeverityColor(notification.severity)}
+                                size="small"
+                              >
+                                {notification.severity}
+                              </Tag>
+                            )}
+                            <Tag size="small">
+                              {getTypeLabel(notification.type)}
+                            </Tag>
+                          </div>
+                        </div>
+                      }
+                      description={
+                        <div>
+                          <div style={{ marginBottom: "4px" }}>
+                            {notification.message}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "12px",
+                              color: "#8c8c8c",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                            }}
+                          >
+                            <span>
+                              {dayjs(notification.createdAt).fromNow()}
+                            </span>
+                            <div onClick={(e) => e.stopPropagation()}>
+                              {notification.status === "UNREAD" && (
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  icon={<CheckOutlined />}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleMarkAsRead(
+                                      notification.notificationId,
+                                      e
+                                    );
+                                  }}
+                                  style={{ marginRight: "4px" }}
+                                />
+                              )}
                               <Button
                                 type="text"
                                 size="small"
-                                icon={<CheckOutlined />}
+                                icon={<DeleteOutlined />}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleMarkAsRead(
-                                    notification.notificationId,
-                                    e
-                                  );
+                                  handleArchive(notification.notificationId, e);
                                 }}
-                                style={{ marginRight: "4px" }}
+                                danger
                               />
-                            )}
-                            <Button
-                              type="text"
-                              size="small"
-                              icon={<DeleteOutlined />}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleArchive(notification.notificationId, e);
-                              }}
-                              danger
-                            />
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    }
-                  />
-                </List.Item>
+                      }
+                    />
+                  </List.Item>
+                )}
+              />
+              {loadingMore && (
+                <div style={{ padding: "12px", textAlign: "center" }}>
+                  <Spin size="small" />
+                  <span style={{ marginLeft: 8, color: "#8c8c8c" }}>
+                    Đang tải thêm...
+                  </span>
+                </div>
               )}
-            />
+              {!hasMore && notifications.length > 0 && (
+                <div
+                  style={{
+                    padding: "12px",
+                    textAlign: "center",
+                    color: "#8c8c8c",
+                    fontSize: "12px",
+                  }}
+                >
+                  Đã hiển thị tất cả thông báo
+                </div>
+              )}
+            </>
           )}
           {notifications.length > 0 && (
             <div
@@ -338,7 +405,11 @@ const NotificationDropdown = () => {
         onOpenChange={(visible) => {
           setDropdownVisible(visible);
           if (visible) {
-            loadNotifications();
+            // Reset and load first page
+            setPage(0);
+            setHasMore(true);
+            setNotifications([]);
+            loadNotifications(0, true);
           }
         }}
       >

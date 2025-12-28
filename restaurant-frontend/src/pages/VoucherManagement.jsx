@@ -29,6 +29,11 @@ import ErrorPage from "../components/Common/ErrorPage";
 import loyaltyService from "../services/loyaltyService";
 import dayjs from "dayjs";
 import { VOUCHER_STATUS } from "../constants.js";
+import {
+  dispatchDataRefresh,
+  listenToDataRefresh,
+  DATA_REFRESH_EVENTS,
+} from "../utils/dataRefreshEvents";
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -49,6 +54,27 @@ const VoucherManagement = () => {
       loadVouchers();
     }
   }, [authLoading, statusFilter]);
+
+  // Listen to voucher changes from other components
+  useEffect(() => {
+    const eventNames = [
+      DATA_REFRESH_EVENTS.VOUCHER_CREATED,
+      DATA_REFRESH_EVENTS.VOUCHER_UPDATED,
+      DATA_REFRESH_EVENTS.VOUCHER_DELETED,
+    ];
+    const cleanupFunctions = [];
+
+    eventNames.forEach((eventName) => {
+      const cleanup = listenToDataRefresh(eventName, () => {
+        loadVouchers();
+      });
+      cleanupFunctions.push(cleanup);
+    });
+
+    return () => {
+      cleanupFunctions.forEach((cleanup) => cleanup());
+    };
+  }, []);
 
   const loadVouchers = async () => {
     setLoading(true);
@@ -88,6 +114,9 @@ const VoucherManagement = () => {
     try {
       await loyaltyService.deleteVoucher(voucherId);
       messageApi.success("Đã xóa voucher thành công");
+      dispatchDataRefresh(DATA_REFRESH_EVENTS.VOUCHER_DELETED, {
+        voucherId,
+      });
       loadVouchers();
     } catch (error) {
       messageApi.error(
@@ -107,9 +136,14 @@ const VoucherManagement = () => {
       if (modalType === "create") {
         await loyaltyService.createVoucher(data);
         messageApi.success("Đã tạo voucher thành công");
+        dispatchDataRefresh(DATA_REFRESH_EVENTS.VOUCHER_CREATED, data);
       } else {
         await loyaltyService.updateVoucher(selectedVoucher.voucherId, data);
         messageApi.success("Đã cập nhật voucher thành công");
+        dispatchDataRefresh(DATA_REFRESH_EVENTS.VOUCHER_UPDATED, {
+          ...data,
+          voucherId: selectedVoucher.voucherId,
+        });
       }
       setModalVisible(false);
       form.resetFields();

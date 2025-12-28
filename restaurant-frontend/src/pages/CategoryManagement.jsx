@@ -59,6 +59,7 @@ const CategoryManagement = () => {
   const [modalType, setModalType] = useState("create");
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [form] = Form.useForm();
+  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
 
   const loadCategories = async () => {
     setLoading(true);
@@ -116,7 +117,7 @@ const CategoryManagement = () => {
     setSelectedCategory(category);
     setModalVisible(true);
 
-    if (type === "edit" && category) {
+    if ((type === "edit" || type === "view") && category) {
       form.setFieldsValue(category);
     } else {
       form.resetFields();
@@ -162,6 +163,50 @@ const CategoryManagement = () => {
     } catch (error) {
       message.error("Lỗi khi xóa danh mục");
     }
+  };
+
+  // Delete multiple categories
+  const handleDeleteMultiple = async () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning("Vui lòng chọn ít nhất một danh mục để xóa");
+      return;
+    }
+
+    Modal.confirm({
+      title: "Xác nhận xóa",
+      content: `Bạn có chắc chắn muốn xóa ${selectedRowKeys.length} danh mục đã chọn?`,
+      okText: "Xóa",
+      okType: "danger",
+      cancelText: "Hủy",
+      onOk: async () => {
+        try {
+          setLoading(true);
+          const deletePromises = selectedRowKeys.map((id) =>
+            apiService.menu.deleteCategory(id)
+          );
+          await Promise.all(deletePromises);
+
+          message.success(
+            `Đã xóa thành công ${selectedRowKeys.length} danh mục`
+          );
+
+          // Dispatch events for each deleted category
+          selectedRowKeys.forEach((id) => {
+            dispatchDataRefresh(DATA_REFRESH_EVENTS.CATEGORY_DELETED, {
+              categoryId: id,
+            });
+          });
+
+          setSelectedRowKeys([]);
+          loadCategories();
+        } catch (error) {
+          message.error("Có lỗi xảy ra khi xóa danh mục");
+          console.error("Error deleting categories:", error);
+        } finally {
+          setLoading(false);
+        }
+      },
+    });
   };
 
   const filteredCategories = React.useMemo(() => {
@@ -389,6 +434,23 @@ const CategoryManagement = () => {
             </Button>
           </Col>
         </Row>
+        {selectedRowKeys.length > 0 && (
+          <Row style={{ marginTop: 16 }}>
+            <Col span={24}>
+              <Space>
+                <span>Đã chọn: {selectedRowKeys.length} danh mục</span>
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={handleDeleteMultiple}
+                >
+                  Xóa đã chọn ({selectedRowKeys.length})
+                </Button>
+                <Button onClick={() => setSelectedRowKeys([])}>Bỏ chọn</Button>
+              </Space>
+            </Col>
+          </Row>
+        )}
       </Card>
 
       {/* Table */}
@@ -398,6 +460,13 @@ const CategoryManagement = () => {
           dataSource={filteredCategories}
           rowKey="categoryId"
           loading={loading}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+            getCheckboxProps: (record) => ({
+              name: record.name,
+            }),
+          }}
           pagination={{
             ...pagination,
             showSizeChanger: true,
@@ -436,21 +505,29 @@ const CategoryManagement = () => {
           <Form.Item
             name="name"
             label="Tên danh mục"
-            rules={[{ required: true, message: "Vui lòng nhập tên danh mục" }]}
+            rules={
+              modalType !== "view"
+                ? [{ required: true, message: "Vui lòng nhập tên danh mục" }]
+                : []
+            }
           >
-            <Input />
+            <Input disabled={modalType === "view"} />
           </Form.Item>
 
           <Form.Item name="description" label="Mô tả">
-            <TextArea rows={3} />
+            <TextArea rows={3} disabled={modalType === "view"} />
           </Form.Item>
 
           <Form.Item
             name="type"
             label="Loại danh mục"
-            rules={[{ required: true, message: "Vui lòng chọn loại danh mục" }]}
+            rules={
+              modalType !== "view"
+                ? [{ required: true, message: "Vui lòng chọn loại danh mục" }]
+                : []
+            }
           >
-            <Select>
+            <Select disabled={modalType === "view"}>
               <Option value="Food">Món ăn</Option>
               <Option value="Drink">Đồ uống</Option>
               <Option value="Dessert">Tráng miệng</Option>
@@ -464,7 +541,11 @@ const CategoryManagement = () => {
             valuePropName="checked"
             initialValue={true}
           >
-            <Switch checkedChildren="Hoạt động" unCheckedChildren="Tạm dừng" />
+            <Switch
+              checkedChildren="Hoạt động"
+              unCheckedChildren="Tạm dừng"
+              disabled={modalType === "view"}
+            />
           </Form.Item>
         </Form>
       </Modal>

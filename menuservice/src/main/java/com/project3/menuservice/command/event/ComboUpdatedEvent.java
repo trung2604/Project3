@@ -16,4 +16,6 @@ public class ComboUpdatedEvent {
     private Double price;
     private Double discount;
     private List<String> menuItemIds;
+    private String imageUrl;
+    private String imagePublicId; // Cloudinary public ID for deletion
 }

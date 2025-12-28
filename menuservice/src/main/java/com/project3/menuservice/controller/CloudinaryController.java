@@ -19,9 +19,12 @@ public class CloudinaryController {
     private CloudinaryService cloudinaryService;
 
     @GetMapping("/signature")
-    public ResponseEntity<ApiResponseDTO<Map<String, String>>> getSignature() {
+    public ResponseEntity<ApiResponseDTO<Map<String, String>>> getSignature(
+            @RequestParam(required = false, defaultValue = "restaurant-menu") String folder) {
         try {
-            Map<String, String> signature = cloudinaryService.generateSignature();
+            log.info("Generating Cloudinary signature for folder: {}", folder);
+            Map<String, String> signature = cloudinaryService.generateSignature(folder);
+            log.debug("Generated signature: {}", signature);
             return ResponseEntity.ok(ApiResponseDTO.success(signature, "Cloudinary signature generated successfully"));
         } catch (Exception e) {
             log.error("Failed to generate Cloudinary signature: {}", e.getMessage(), e);

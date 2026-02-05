@@ -8,6 +8,7 @@ import {
   Space,
   Tag,
   App,
+  Tooltip,
   Row,
   Col,
   Statistic,
@@ -32,6 +33,7 @@ import {
   ShopOutlined,
   FilterOutlined,
   ClearOutlined,
+  DollarOutlined,
 } from "@ant-design/icons";
 import { useLocation, useNavigate } from "react-router-dom";
 import dayjs from "dayjs";
@@ -58,6 +60,17 @@ import {
   dispatchDataRefresh,
   DATA_REFRESH_EVENTS,
 } from "../utils/dataRefreshEvents";
+import PaymentDetailsModal from "../components/PaymentDetailsModal";
+import RefundPaymentModal from "../components/RefundPaymentModal";
+import ProcessPaymentModal from "../components/ProcessPaymentModal";
+import paymentAPI from "../services/paymentService";
+import {
+  getPaymentStatusColor,
+  getPaymentStatusText,
+  getPaymentMethodText,
+  getPaymentMethodIcon,
+} from "../utils/paymentHelpers";
+import { PAYMENT_STATUS, PAYMENT_METHODS } from "../constants";
 
 const { Option } = Select;
 const { Search } = Input;
@@ -83,6 +96,13 @@ const OrderManagement = () => {
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [menuItems, setMenuItems] = useState([]);
+  const [paymentDetailModalVisible, setPaymentDetailModalVisible] = useState(false);
+  const [selectedPaymentId, setSelectedPaymentId] = useState(null);
+  const [refundModalVisible, setRefundModalVisible] = useState(false);
+  const [refundingPayment, setRefundingPayment] = useState(null);
+  const [processPaymentModalVisible, setProcessPaymentModalVisible] = useState(false);
+  const [processingOrder, setProcessingOrder] = useState(null);
+  const [processingPayment, setProcessingPayment] = useState(null);
 
   const canManage = canManageMenu(role);
   const isCustomer = role === "CUSTOMER";
@@ -199,6 +219,51 @@ const OrderManagement = () => {
     };
   }, []);
 
+  // Handle PayPal Callback
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const paymentStatus = searchParams.get("payment");
+    const token = searchParams.get("token");
+    const payerId = searchParams.get("PayerID");
+    const paymentId = searchParams.get("paymentId");
+
+    if (paymentStatus === "success" && token && payerId && paymentId) {
+      const handleCallback = async () => {
+        const hide = antdMessage.loading("Đang xử lý thanh toán PayPal...", 0);
+        try {
+          await paymentAPI.handlePayPalCallback(paymentId, token, payerId);
+          antdMessage.success("Thanh toán PayPal thành công!");
+
+          // Clear URL params
+          searchParams.delete("payment");
+          searchParams.delete("token");
+          searchParams.delete("PayerID");
+          searchParams.delete("paymentId");
+          const newSearch = searchParams.toString();
+          navigate(`/dashboard/orders${newSearch ? `?${newSearch}` : ""}`, { replace: true });
+
+          loadOrders();
+        } catch (error) {
+          console.error("PayPal callback error:", error);
+          antdMessage.error("Không thể xác nhận thanh toán PayPal. Vui lòng liên hệ nhân viên.");
+        } finally {
+          hide();
+        }
+      };
+
+      handleCallback();
+    } else if (paymentStatus === "cancelled") {
+      antdMessage.info("Bạn đã hủy thanh toán PayPal");
+      // Clear URL params
+      searchParams.delete("payment");
+      searchParams.delete("token");
+      searchParams.delete("PayerID");
+      searchParams.delete("paymentId");
+      const newSearch = searchParams.toString();
+      navigate(`/dashboard/orders${newSearch ? `?${newSearch}` : ""}`, { replace: true });
+    }
+  }, [location.search, navigate]);
+
   const loadOrders = async () => {
     const token = localStorage.getItem("accessToken");
     if (!token) {
@@ -283,6 +348,16 @@ const OrderManagement = () => {
         color: "orange",
         icon: <ClockCircleOutlined />,
         text: "Chờ xử lý",
+      },
+      PAID: {
+        color: "green",
+        icon: <CheckCircleOutlined />,
+        text: "Đã thanh toán",
+      },
+      PAYMENT_FAILED: {
+        color: "red",
+        icon: <CloseCircleOutlined />,
+        text: "Lỗi thanh toán",
       },
       COOKING: {
         color: "blue",
@@ -405,6 +480,7 @@ const OrderManagement = () => {
         deliveryAddress: values.deliveryAddress || null,
         tableNumber: values.tableNumber || null,
         notes: values.notes || null,
+        paymentMethod: values.paymentMethod || PAYMENT_METHODS.CASH,
       };
 
       await apiService.order.createOrder(orderData);
@@ -418,6 +494,89 @@ const OrderManagement = () => {
       antdMessage.error(error.message || "Không thể tạo đơn hàng");
     }
   };
+
+  const handleRefundSuccess = () => {
+    setRefundModalVisible(false);
+    setRefundingPayment(null);
+    loadOrders(); // Tải lại để cập nhật trạng thái thanh toán
+    antdMessage.success("Hoàn tiền thành công");
+  };
+  const handleShowRefund = (payment) => {
+    setRefundingPayment(payment);
+    setRefundModalVisible(true);
+  };
+
+  const handlePayNow = async (order) => {
+    try {
+      // Get payment info for this order
+      const response = await paymentAPI.getPaymentsByOrderId(order.orderId);
+      // Interceptor might return array directly or wrapped object
+      const payments = Array.isArray(response) ? response : (response?.data || []);
+
+      // Find pending payment
+      // Find pending payment (Payment object has 'status', Order object has 'paymentStatus')
+      const pendingPayment = payments.find(p => p.status === PAYMENT_STATUS.PENDING);
+
+      if (!pendingPayment) {
+        antdMessage.warning("Không tìm thấy thanh toán chờ xử lý cho đơn hàng này");
+        return;
+      }
+
+      setProcessingOrder(order);
+      setProcessingPayment(pendingPayment);
+      setProcessPaymentModalVisible(true);
+    } catch (error) {
+      console.error("Error loading payment for order:", error);
+      antdMessage.error("Không thể tải thông tin thanh toán");
+    }
+  };
+
+  const handlePaymentSuccess = () => {
+    setProcessPaymentModalVisible(false);
+    setProcessingOrder(null);
+    setProcessingPayment(null);
+    loadOrders(); // Reload orders to get updated payment status
+    antdMessage.success("Thanh toán thành công!");
+  };
+
+  const handleConfirmPayment = async (order) => {
+    try {
+      let paymentId = order.paymentId;
+
+      if (!paymentId) {
+        // Try to find pending payment
+        const response = await paymentAPI.getPaymentsByOrderId(order.orderId);
+        const payments = Array.isArray(response) ? response : (response?.data || []);
+        const pendingPayment = payments.find(p => p.status === PAYMENT_STATUS.PENDING);
+        if (pendingPayment) {
+          paymentId = pendingPayment.paymentId;
+        }
+      }
+
+      if (!paymentId) {
+        antdMessage.error("Không tìm thấy thông tin thanh toán");
+        return;
+      }
+
+      await paymentAPI.completePayment(paymentId);
+      antdMessage.success("Xác nhận thanh toán thành công");
+      loadOrders();
+    } catch (error) {
+      console.error("Error confirming payment:", error);
+      antdMessage.error("Không thể xác nhận thanh toán");
+    }
+  };
+
+  const shouldShowPaymentButton = (order) => {
+    // Chỉ hiện nút thanh toán nếu payment đang PENDING
+    if (order.paymentStatus !== PAYMENT_STATUS.PENDING) {
+      return false;
+    }
+
+    // Cho phép thanh toán ở mọi trạng thái chưa hoàn thành/hủy
+    return ["PENDING", "COOKING", "READY"].includes(order.orderStatus);
+  };
+
 
   const showOrderDetail = async (orderId) => {
     try {
@@ -590,45 +749,45 @@ const OrderManagement = () => {
     },
     ...(isManager
       ? [
-          {
-            title: "Khách hàng",
-            key: "customer",
-            width: 160,
-            ellipsis: {
-              showTitle: false,
-            },
-            render: (_, record) => (
-              <div>
-                <div
-                  style={{
-                    fontWeight: "500",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    maxWidth: "160px",
-                  }}
-                  title={record.customerName || "N/A"}
-                >
-                  {record.customerName || "N/A"}
-                </div>
-                <small
-                  style={{
-                    color: "#8c8c8c",
-                    fontSize: "11px",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    display: "block",
-                    maxWidth: "160px",
-                  }}
-                  title={record.customerPhone || ""}
-                >
-                  {record.customerPhone || ""}
-                </small>
-              </div>
-            ),
+        {
+          title: "Khách hàng",
+          key: "customer",
+          width: 160,
+          ellipsis: {
+            showTitle: false,
           },
-        ]
+          render: (_, record) => (
+            <div>
+              <div
+                style={{
+                  fontWeight: "500",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  maxWidth: "160px",
+                }}
+                title={record.customerName || "N/A"}
+              >
+                {record.customerName || "N/A"}
+              </div>
+              <small
+                style={{
+                  color: "#8c8c8c",
+                  fontSize: "11px",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  display: "block",
+                  maxWidth: "160px",
+                }}
+                title={record.customerPhone || ""}
+              >
+                {record.customerPhone || ""}
+              </small>
+            </div>
+          ),
+        },
+      ]
       : []),
     {
       title: "Loại",
@@ -643,6 +802,87 @@ const OrderManagement = () => {
       key: "orderStatus",
       width: 130,
       render: getStatusTag,
+    },
+    {
+      title: "Thanh toán",
+      key: "paymentStatus",
+      width: 140,
+      render: (_, record) => {
+        // Kiểm tra đơn hàng có thông tin thanh toán không
+        if (!record.paymentId && !record.paymentStatus) {
+          return <Tag color="default">Chưa có</Tag>;
+        }
+        return (
+          <Space direction="vertical" size={2}>
+            <Tag color={getPaymentStatusColor(record.paymentStatus)}>
+              {getPaymentStatusText(record.paymentStatus)}
+            </Tag>
+            {record.paymentMethod && (
+              <div style={{ fontSize: "12px", color: "#8c8c8c" }}>
+                {getPaymentMethodIcon(record.paymentMethod)}{" "}
+                {getPaymentMethodText(record.paymentMethod)}
+              </div>
+            )}
+            {isCustomer && record.paymentStatus === PAYMENT_STATUS.PENDING && (
+              shouldShowPaymentButton(record) ? (
+                <Button
+                  type="primary"
+                  size="small"
+                  onClick={() => handlePayNow(record)}
+                  style={{ padding: "2px 8px", fontSize: "12px", height: "auto" }}
+                  icon={<DollarOutlined />}
+                >
+                  Thanh toán
+                </Button>
+              ) : (
+                <Tooltip title="Vui lòng đợi món sẵn sàng để thanh toán">
+                  <Button
+                    type="default"
+                    size="small"
+                    disabled
+                    style={{ padding: "2px 8px", fontSize: "12px", height: "auto" }}
+                    icon={<DollarOutlined />}
+                  >
+                    Thanh toán
+                  </Button>
+                </Tooltip>
+              )
+            )}
+            {record.paymentId && (
+              <Button
+                type="link"
+                size="small"
+                onClick={() => {
+                  setSelectedPaymentId(record.paymentId);
+                  setPaymentDetailModalVisible(true);
+                }}
+                style={{ padding: 0, height: "auto", fontSize: "12px" }}
+              >
+                Chi tiết
+              </Button>
+            )}
+
+            {canManage &&
+              record.paymentMethod === PAYMENT_METHODS.CASH &&
+              record.paymentStatus === PAYMENT_STATUS.PENDING && (
+                <Popconfirm
+                  title="Xác nhận đã nhận tiền?"
+                  onConfirm={() => handleConfirmPayment(record)}
+                  okText="Xác nhận"
+                  cancelText="Hủy"
+                >
+                  <Button
+                    type="primary"
+                    size="small"
+                    style={{ fontSize: "12px", height: "24px", padding: "0 8px" }}
+                  >
+                    Xác nhận thanh toán
+                  </Button>
+                </Popconfirm>
+              )}
+          </Space>
+        );
+      },
     },
     {
       title: "Tổng tiền",
@@ -1085,11 +1325,11 @@ const OrderManagement = () => {
                 <>
                   <Button
                     size="small"
-                    type={filters.type === "DINE_IN" ? "primary" : "default"}
+                    type={filters.type === ORDER_TYPES.DINE_IN ? "primary" : "default"}
                     onClick={() =>
                       setFilters({
                         ...filters,
-                        type: filters.type === "DINE_IN" ? "" : "DINE_IN",
+                        type: filters.type === ORDER_TYPES.DINE_IN ? "" : ORDER_TYPES.DINE_IN,
                       })
                     }
                   >
@@ -1097,11 +1337,11 @@ const OrderManagement = () => {
                   </Button>
                   <Button
                     size="small"
-                    type={filters.type === "TAKEOUT" ? "primary" : "default"}
+                    type={filters.type === ORDER_TYPES.TAKEAWAY ? "primary" : "default"}
                     onClick={() =>
                       setFilters({
                         ...filters,
-                        type: filters.type === "TAKEOUT" ? "" : "TAKEOUT",
+                        type: filters.type === ORDER_TYPES.TAKEAWAY ? "" : ORDER_TYPES.TAKEAWAY,
                       })
                     }
                   >
@@ -1109,11 +1349,11 @@ const OrderManagement = () => {
                   </Button>
                   <Button
                     size="small"
-                    type={filters.type === "DELIVERY" ? "primary" : "default"}
+                    type={filters.type === ORDER_TYPES.DELIVERY ? "primary" : "default"}
                     onClick={() =>
                       setFilters({
                         ...filters,
-                        type: filters.type === "DELIVERY" ? "" : "DELIVERY",
+                        type: filters.type === ORDER_TYPES.DELIVERY ? "" : ORDER_TYPES.DELIVERY,
                       })
                     }
                   >
@@ -1337,6 +1577,25 @@ const OrderManagement = () => {
           </Form.Item>
 
           <Form.Item
+            name="paymentMethod"
+            label="Phương thức thanh toán"
+            initialValue={PAYMENT_METHODS.CASH}
+            rules={[{ required: true, message: "Vui lòng chọn phương thức thanh toán" }]}
+          >
+            <Select placeholder="Chọn phương thức thanh toán">
+              <Option value={PAYMENT_METHODS.CASH}>
+                💵 {getPaymentMethodText(PAYMENT_METHODS.CASH)}
+              </Option>
+              <Option value={PAYMENT_METHODS.VIETQR}>
+                📱 {getPaymentMethodText(PAYMENT_METHODS.VIETQR)}
+              </Option>
+              <Option value={PAYMENT_METHODS.PAYPAL}>
+                🅿️ {getPaymentMethodText(PAYMENT_METHODS.PAYPAL)}
+              </Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item
             name="customerName"
             label="Tên khách hàng"
             rules={[
@@ -1362,7 +1621,7 @@ const OrderManagement = () => {
           >
             {({ getFieldValue }) => {
               const orderType = getFieldValue("orderType");
-              if (orderType === "DINE_IN") {
+              if (orderType === ORDER_TYPES.DINE_IN) {
                 return (
                   <Form.Item
                     name="tableNumber"
@@ -1375,7 +1634,7 @@ const OrderManagement = () => {
                   </Form.Item>
                 );
               }
-              if (orderType === "DELIVERY") {
+              if (orderType === ORDER_TYPES.DELIVERY) {
                 return (
                   <Form.Item
                     name="deliveryAddress"
@@ -1497,6 +1756,37 @@ const OrderManagement = () => {
           </Form.Item>
         </Form>
       </Modal>
+      <PaymentDetailsModal
+        visible={paymentDetailModalVisible}
+        paymentId={selectedPaymentId}
+        onClose={() => {
+          setPaymentDetailModalVisible(false);
+          setSelectedPaymentId(null);
+        }}
+        onRefund={handleShowRefund}
+      />
+      {/* Modal Hoàn Tiền */}
+      <RefundPaymentModal
+        visible={refundModalVisible}
+        payment={refundingPayment}
+        onClose={() => {
+          setRefundModalVisible(false);
+          setRefundingPayment(null);
+        }}
+        onSuccess={handleRefundSuccess}
+      />
+      {/* Modal Xử Lý Thanh Toán */}
+      <ProcessPaymentModal
+        visible={processPaymentModalVisible}
+        payment={processingPayment}
+        order={processingOrder}
+        onClose={() => {
+          setProcessPaymentModalVisible(false);
+          setProcessingOrder(null);
+          setProcessingPayment(null);
+        }}
+        onSuccess={handlePaymentSuccess}
+      />
     </div>
   );
 };

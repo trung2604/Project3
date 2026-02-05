@@ -1,19 +1,17 @@
-package com.project3.loyaltyservice.command.commands;
+package com.project3.orderservice.command.commands;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.axonframework.modelling.command.TargetAggregateIdentifier;
 
 @Data
-@NoArgsConstructor
+@Builder
 @AllArgsConstructor
-public class EarnPointsCommand {
+@NoArgsConstructor
+public class UpdateOrderPaymentStatusCommand {
     @TargetAggregateIdentifier
-    private String accountId;
-    private String userId;
-    private Long points;
     private String orderId;
-    private String description;
+    private String paymentStatus;
 }
-

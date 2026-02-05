@@ -42,6 +42,9 @@ public class PaymentEventHandler {
             paymentRepository.save(payment);
             log.info("Payment created and saved: {}", event.getPaymentId());
             
+            // Publish payment-created event to Kafka
+            eventPublisher.publishPaymentCreated(payment);
+            
         } catch (Exception e) {
             log.error("Error handling PaymentCreatedEvent: {}", e.getMessage(), e);
             throw e;

@@ -9,6 +9,10 @@ import NotificationDetailModal from "./NotificationDetailModal";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import "dayjs/locale/vi";
+import {
+  dispatchDataRefresh,
+  DATA_REFRESH_EVENTS,
+} from "../../utils/dataRefreshEvents";
 
 dayjs.extend(relativeTime);
 dayjs.locale("vi");
@@ -41,6 +45,15 @@ const NotificationDropdown = () => {
     });
     if (notification.status === "UNREAD") {
       setUnreadCount((prev) => prev + 1);
+    }
+
+    // Dispatch global refresh event based on notification type to update other components
+    if (notification.type === "ORDER_UPDATE") {
+      dispatchDataRefresh(DATA_REFRESH_EVENTS.ORDER_UPDATED, {
+        orderId: notification.referenceId
+      });
+    } else if (notification.type === "MENU_ALERT") {
+      dispatchDataRefresh(DATA_REFRESH_EVENTS.MENU_ITEM_UPDATED, {});
     }
   }, []);
 

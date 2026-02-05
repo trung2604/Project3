@@ -38,6 +38,9 @@ public class OrderCommandController extends BaseOrderController {
                 command.setOrderId(UUID.randomUUID().toString());
             }
             
+            log.info("Creating order: orderId={}, customerId={}, createdBy={}, currentUserId={}", 
+                    command.getOrderId(), command.getCustomerId(), command.getCreatedBy(), currentUserId);
+            
             String result = commandGateway.sendAndWait(command);
             return ResponseEntity.status(HttpStatus.CREATED)
                     .body(ApiResponseDTO.created(result, "Order created successfully"));

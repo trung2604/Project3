@@ -5,6 +5,7 @@ import com.paypal.core.PayPalHttpClient;
 import com.paypal.http.HttpResponse;
 import com.paypal.orders.*;
 import com.project3.paymentservice.command.enums.PaymentMethod;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -25,6 +26,9 @@ public class PayPalPaymentProcessor implements PaymentProcessor {
     
     @Value("${paypal.mode:sandbox}")
     private String mode;
+
+    @Value("${paypal.exchange-rate:26500}")
+    private double exchangeRate;
     
     private PayPalHttpClient client;
     
@@ -39,6 +43,32 @@ public class PayPalPaymentProcessor implements PaymentProcessor {
             client = new PayPalHttpClient(environment);
         }
         return client;
+    }
+    
+    /**
+     * Validate configuration at startup
+     */
+    @PostConstruct
+    public void validateConfiguration() {
+        boolean isConfigured = isNotEmpty(clientId) && isNotEmpty(clientSecret);
+        
+        if (!isConfigured) {
+            log.warn("=====================================================================");
+            log.warn("PayPal Payment Processor is NOT configured!");
+            log.warn("Missing required properties:");
+            if (!isNotEmpty(clientId)) log.warn("  - paypal.client-id");
+            if (!isNotEmpty(clientSecret)) log.warn("  - paypal.client-secret");
+            log.warn("PayPal will use MOCK mode until properly configured.");
+            log.warn("=====================================================================");
+        } else {
+            log.info("PayPal Payment Processor configured successfully.");
+            log.info("  Mode: {}", mode);
+            log.info("  Client ID: {}***", clientId.substring(0, Math.min(8, clientId.length())));
+        }
+    }
+    
+    private boolean isNotEmpty(String value) {
+        return value != null && !value.trim().isEmpty();
     }
     
     @Override
@@ -64,15 +94,15 @@ public class PayPalPaymentProcessor implements PaymentProcessor {
                 .customId(request.getPaymentId())
                 .amountWithBreakdown(new AmountWithBreakdown()
                     .currencyCode("USD")
-                    .value(String.format("%.2f", request.getAmount())));
+                    .value(String.format("%.2f", request.getAmount() / exchangeRate)));
             
             purchaseUnits.add(purchaseUnit);
             orderRequest.purchaseUnits(purchaseUnits);
             
             // Set application context with return URLs
             ApplicationContext applicationContext = new ApplicationContext()
-                .returnUrl(request.getReturnUrl() != null ? request.getReturnUrl() : "http://localhost:8006/api/payments/paypal/success")
-                .cancelUrl(request.getCancelUrl() != null ? request.getCancelUrl() : "http://localhost:8006/api/payments/paypal/cancel");
+                .returnUrl(request.getReturnUrl() != null ? request.getReturnUrl() : "http://localhost:8006/api/payments/paypal/success?paymentId=" + request.getPaymentId())
+                .cancelUrl(request.getCancelUrl() != null ? request.getCancelUrl() : "http://localhost:8006/api/payments/paypal/cancel?paymentId=" + request.getPaymentId());
             orderRequest.applicationContext(applicationContext);
             
             // Create order
@@ -143,5 +173,69 @@ public class PayPalPaymentProcessor implements PaymentProcessor {
     @Override
     public boolean supports(PaymentMethod method) {
         return method == PaymentMethod.PAYPAL;
+    }
+
+    public PaymentResult executePayment(String gatewayOrderId) {
+        log.info("Executing PayPal payment capture for Order ID: {}", gatewayOrderId);
+        try {
+            if (getClient() == null) {
+                return createMockPaymentResult(new PaymentRequest()); // Return mock if not configured
+            }
+
+            OrdersCaptureRequest request = new OrdersCaptureRequest(gatewayOrderId);
+            request.requestBody(new OrderRequest());
+
+            HttpResponse<Order> response = getClient().execute(request);
+            Order order = response.result();
+
+            return buildPaymentResultFromOrder(order);
+
+        } catch (Exception e) {
+            log.error("Error capturing PayPal payment: {}", e.getMessage());
+            
+            // Handle ORDER_ALREADY_CAPTURED error idempotent behavior
+            if (e.getMessage() != null && e.getMessage().contains("ORDER_ALREADY_CAPTURED")) {
+                log.info("Order {} already captured. Fetching details to confirm status.", gatewayOrderId);
+                try {
+                    OrdersGetRequest getRequest = new OrdersGetRequest(gatewayOrderId);
+                    HttpResponse<Order> response = getClient().execute(getRequest);
+                    Order order = response.result();
+                    
+                    if ("COMPLETED".equals(order.status())) {
+                        log.info("Order {} confirmed as COMPLETED.", gatewayOrderId);
+                        return buildPaymentResultFromOrder(order);
+                    }
+                } catch (Exception ex) {
+                    log.error("Error fetching captured order details: {}", ex.getMessage());
+                }
+            }
+
+            PaymentResult result = new PaymentResult();
+            result.setSuccess(false);
+            result.setErrorMessage("PayPal capture failed: " + e.getMessage());
+            return result;
+        }
+    }
+
+    private PaymentResult buildPaymentResultFromOrder(Order order) {
+        PaymentResult result = new PaymentResult();
+        if ("COMPLETED".equals(order.status())) {
+            result.setSuccess(true);
+            result.setGatewayOrderId(order.id());
+            // Extract capture ID if available, otherwise use order ID
+            String transactionId = order.id();
+            if (order.purchaseUnits() != null && !order.purchaseUnits().isEmpty()) {
+                 var payments = order.purchaseUnits().get(0).payments();
+                 if (payments != null && payments.captures() != null && !payments.captures().isEmpty()) {
+                     transactionId = payments.captures().get(0).id();
+                 }
+            }
+            result.setGatewayTransactionId(transactionId);
+            result.setMessage("PayPal payment captured successfully.");
+        } else {
+            result.setSuccess(false);
+            result.setErrorMessage("PayPal payment not completed. Status: " + order.status());
+        }
+        return result;
     }
 }

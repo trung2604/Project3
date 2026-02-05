@@ -44,6 +44,7 @@ import Loading from "../components/Common/Loading";
 import ErrorPage from "../components/Common/ErrorPage";
 import {
   dispatchDataRefresh,
+  listenToDataRefresh,
   DATA_REFRESH_EVENTS,
 } from "../utils/dataRefreshEvents";
 
@@ -180,20 +181,20 @@ const InventoryManagement = () => {
         unit: ingredient.unit || "",
         initialStock:
           ingredient.currentStock !== null &&
-          ingredient.currentStock !== undefined
+            ingredient.currentStock !== undefined
             ? Number(ingredient.currentStock)
             : ingredient.initialStock !== null &&
               ingredient.initialStock !== undefined
-            ? Number(ingredient.initialStock)
-            : 0,
+              ? Number(ingredient.initialStock)
+              : 0,
         minStockLevel:
           ingredient.minStockLevel !== null &&
-          ingredient.minStockLevel !== undefined
+            ingredient.minStockLevel !== undefined
             ? Number(ingredient.minStockLevel)
             : 0,
         maxStockLevel:
           ingredient.maxStockLevel !== null &&
-          ingredient.maxStockLevel !== undefined
+            ingredient.maxStockLevel !== undefined
             ? Number(ingredient.maxStockLevel)
             : 0,
         unitCost:

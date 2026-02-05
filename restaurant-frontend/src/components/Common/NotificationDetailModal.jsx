@@ -415,13 +415,13 @@ const NotificationDetailModal = ({
         </Button>,
         ...(Array.isArray(getActionButton())
           ? getActionButton().map((btn, idx) =>
-              React.isValidElement(btn) && btn.key
-                ? btn
-                : React.cloneElement(btn, { key: `action-${idx}` })
-            )
+            React.isValidElement(btn) && btn.key
+              ? btn
+              : React.cloneElement(btn, { key: `action-${idx}` })
+          )
           : getActionButton()
-          ? [React.cloneElement(getActionButton(), { key: "action-0" })]
-          : []),
+            ? [React.cloneElement(getActionButton(), { key: "action-0" })]
+            : []),
       ].filter(Boolean)}
     >
       <Spin spinning={loading}>
@@ -450,8 +450,8 @@ const NotificationDetailModal = ({
                 fullNotification.status === "UNREAD"
                   ? "blue"
                   : fullNotification.status === "READ"
-                  ? "green"
-                  : "default"
+                    ? "green"
+                    : "default"
               }
             >
               {getStatusLabel(fullNotification.status)}
@@ -466,22 +466,7 @@ const NotificationDetailModal = ({
               {dayjs(fullNotification.readAt).format("DD/MM/YYYY HH:mm:ss")}
             </Descriptions.Item>
           )}
-          {metadata && (
-            <Descriptions.Item label="Thông tin bổ sung">
-              <div style={{ maxHeight: "200px", overflowY: "auto" }}>
-                <pre
-                  style={{
-                    margin: 0,
-                    fontSize: "12px",
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  {JSON.stringify(metadata, null, 2)}
-                </pre>
-              </div>
-            </Descriptions.Item>
-          )}
+
         </Descriptions>
       </Spin>
     </Modal>

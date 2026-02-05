@@ -39,6 +39,7 @@ public class OrderMapper {
         order.setTableNumber(event.getTableNumber());
         order.setNotes(event.getNotes());
         order.setCreatedBy(event.getCreatedBy());
+        order.setPaymentMethod(event.getPaymentMethod());
         return order;
     }
     

@@ -12,6 +12,7 @@ import org.axonframework.eventhandling.EventHandler;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Component
@@ -41,6 +42,8 @@ public class LoyaltyEventHandler {
         account.setCurrentPoints(0L);
         account.setTotalPointsEarned(0L);
         account.setTotalPointsRedeemed(0L);
+        account.setCreatedAt(event.getCreatedAt() != null ? event.getCreatedAt() : java.time.LocalDateTime.now());
+        account.setUpdatedAt(LocalDateTime.now());
         
         loyaltyAccountRepository.save(account);
         log.info("Loyalty account created: {}", event.getAccountId());

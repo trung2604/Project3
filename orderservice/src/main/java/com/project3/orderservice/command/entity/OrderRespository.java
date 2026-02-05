@@ -15,6 +15,8 @@ public interface OrderRespository extends JpaRepository<Order, String> {
     List<Order> findByOrderStatus(OrderStatus status);
     List<Order> findByOrderType(OrderType type);
     List<Order> findByCustomerId(String customerId);
+    List<Order> findByCustomerIdAndOrderStatus(String customerId, OrderStatus status);
+    List<Order> findByCustomerIdAndOrderType(String customerId, OrderType type);
     
     @Query("SELECT o FROM Order o WHERE o.orderDate BETWEEN :startDate AND :endDate")
     List<Order> findByOrderDateBetween(@Param("startDate") LocalDateTime startDate, 

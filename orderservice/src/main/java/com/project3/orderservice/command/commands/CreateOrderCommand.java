@@ -20,7 +20,6 @@ public class CreateOrderCommand {
     private String customerName;
     private String customerPhone;
     
-    @TargetAggregateIdentifier
     private OrderType orderType;
     
     private List<OrderItemDTO> orderItems;
@@ -35,4 +34,6 @@ public class CreateOrderCommand {
     
     private String notes;
     private String createdBy;
+    
+    private String paymentMethod;
 }

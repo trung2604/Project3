@@ -11,6 +11,7 @@ import AppLayout from "./components/Layout/AppLayout";
 import Landing from "./pages/Landing";
 import Profile from "./pages/Profile";
 import AuthCallback from "./pages/AuthCallback";
+import PaymentSuccess from "./pages/PaymentSuccess";
 import { ProtectedRoute, PublicRoute } from "./components/ProtectedRoute";
 import ErrorPage from "./components/Common/ErrorPage";
 import Dashboard from "./pages/Dashboard";
@@ -81,6 +82,7 @@ function App() {
                     }
                   />
                   <Route path="/auth/callback" element={<AuthCallback />} />
+                  <Route path="/payment/success" element={<PaymentSuccess />} />
                   <Route
                     path="/dashboard/*"
                     element={

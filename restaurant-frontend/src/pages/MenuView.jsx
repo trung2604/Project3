@@ -38,6 +38,8 @@ import {
   DATA_REFRESH_EVENTS,
   listenToDataRefresh,
 } from "../utils/dataRefreshEvents";
+import { PAYMENT_METHODS, ORDER_TYPES } from "../constants";
+import paymentAPI from "../services/paymentService";
 
 const { Option } = Select;
 const { Search } = Input;
@@ -58,6 +60,9 @@ const MenuView = () => {
   const [combos, setCombos] = useState([]);
   const [activeTab, setActiveTab] = useState("menu"); // "menu" or "combos"
   const [selectedItems, setSelectedItems] = useState(new Map()); // Map of itemId -> { item, quantity, type: 'menu' | 'combo' }
+  const [paymentModalVisible, setPaymentModalVisible] = useState(false);
+  const [qrCodeUrl, setQrCodeUrl] = useState("");
+  const [currentPaymentId, setCurrentPaymentId] = useState(null);
 
   // Load menu items (only active items)
   const loadMenuItems = async () => {
@@ -69,8 +74,8 @@ const MenuView = () => {
         active: true, // Only show active items
         ...(filters.categoryId &&
           filters.categoryId.trim() !== "" && {
-            categoryId: filters.categoryId,
-          }),
+          categoryId: filters.categoryId,
+        }),
         ...(filters.search &&
           filters.search.trim() !== "" && { search: filters.search }),
       };
@@ -825,7 +830,7 @@ const MenuView = () => {
       return;
     }
     orderForm.setFieldsValue({
-      orderType: "DINE_IN",
+      orderType: ORDER_TYPES.DINE_IN,
       notes: "",
       customerName:
         user.firstName && user.lastName
@@ -923,6 +928,12 @@ const MenuView = () => {
       const discountPercentage =
         subtotal > 0 ? (totalDiscount / subtotal) * 100 : 0;
 
+      // Recalculate finalTotal for payment
+      const discountAmount = totalDiscountAmount;
+      const totalAfterDiscount = subtotal - discountAmount;
+      const vat = totalAfterDiscount * 0.1;
+      const finalTotal = totalAfterDiscount + vat;
+
       const orderData = {
         orderType: values.orderType,
         customerName: values.customerName,
@@ -932,16 +943,101 @@ const MenuView = () => {
         discountAmount: totalDiscountAmount,
         vatPercentage: 10,
         deliveryAddress:
-          values.orderType === "DELIVERY" ? values.deliveryAddress : null,
-        tableNumber: values.orderType === "DINE_IN" ? values.tableNumber : null,
+          values.orderType === ORDER_TYPES.DELIVERY ? values.deliveryAddress : null,
+        tableNumber: values.orderType === ORDER_TYPES.DINE_IN ? values.tableNumber : null,
         notes: values.notes || null,
+        paymentStatus: "PENDING"
       };
 
-      await apiService.order.createOrder(orderData);
-      antMessage.success("Đặt món thành công!");
-      setOrderModalVisible(false);
-      orderForm.resetFields();
-      setSelectedItems(new Map());
+      // 1. Create Order
+      const createdOrderResponse = await apiService.order.createOrder(orderData);
+      const orderId = typeof createdOrderResponse === 'object' ? createdOrderResponse.orderId : createdOrderResponse;
+
+      console.log("Order created:", orderId);
+
+      // 2. Handle Payment
+      const paymentMethod = values.paymentMethod || PAYMENT_METHODS.CASH;
+
+      if (paymentMethod === PAYMENT_METHODS.CASH) {
+        antMessage.success("Đặt món thành công!");
+        setOrderModalVisible(false);
+        orderForm.resetFields();
+        setSelectedItems(new Map());
+      } else {
+        // 1. Create Payment
+        try {
+          const createPaymentData = {
+            orderId: orderId,
+            amount: finalTotal,
+            paymentMethod: paymentMethod,
+            customerId: user?.userId || user?.id || "guest",
+          };
+
+          const createResponse = await paymentAPI.createPayment(createPaymentData);
+          console.log("Create Payment Response:", createResponse);
+
+          // Handle various response structures (Direct object, Axio response, or nested data)
+          // Interceptor unwraps response
+          const createdPayment = createResponse;
+
+          if (!createdPayment || !createdPayment.paymentId) {
+            console.error("Invalid response structure:", createResponse);
+            throw new Error("Không nhận được dữ liệu thanh toán hợp lệ từ Server");
+          }
+
+          const paymentId = createdPayment.paymentId;
+
+          // 2. Process Payment (Get QR or URL)
+          const processPaymentData = {
+            orderId: orderId,
+            amount: finalTotal,
+            customerId: user?.userId || user?.id || "guest",
+            paymentMethod: paymentMethod,
+            returnUrl: `${window.location.origin}/payment/success?paymentId=${paymentId}&orderId=${orderId}`,
+            cancelUrl: `${window.location.origin}/menu`
+          };
+
+          const processResponse = await paymentAPI.processPayment(paymentId, processPaymentData);
+          console.log("Process Payment Response:", processResponse);
+
+          // Interceptor unwraps response
+          const processResult = processResponse;
+
+          if (!processResult) {
+            throw new Error("Không nhận được kết quả xử lý thanh toán từ Server");
+          }
+
+          if (paymentMethod === PAYMENT_METHODS.VIETQR) {
+            if (processResult.qrCodeData) {
+              setQrCodeUrl(processResult.qrCodeData);
+              setCurrentPaymentId(paymentId);
+              setPaymentModalVisible(true);
+              setOrderModalVisible(false);
+              orderForm.resetFields();
+              setSelectedItems(new Map());
+              antMessage.success("Đơn hàng đã tạo. Vui lòng quét mã QR để thanh toán.");
+            } else {
+              antMessage.warning("Không thể tạo mã QR. Vui lòng thanh toán tại quầy.");
+              setOrderModalVisible(false);
+            }
+          } else if (paymentMethod === PAYMENT_METHODS.PAYPAL) {
+            if (processResult.redirectUrl) {
+              window.location.href = processResult.redirectUrl;
+            } else {
+              antMessage.error("Không tìm thấy đường dẫn thanh toán PayPal.");
+            }
+          }
+        } catch (paymentError) {
+          console.error("Error creating/processing payment:", paymentError);
+          const errorMessage = paymentError.response?.data?.message || paymentError.message || "Lỗi không xác định";
+          antMessage.error(`Tạo thanh toán thất bại: ${errorMessage}`);
+          setOrderModalVisible(false);
+          orderForm.resetFields();
+          setSelectedItems(new Map());
+        }
+        orderForm.resetFields();
+        setSelectedItems(new Map());
+      }
     } catch (error) {
       console.error("Error creating order:", error);
       antMessage.error(error.message || "Không thể đặt món. Vui lòng thử lại!");
@@ -1235,7 +1331,7 @@ const MenuView = () => {
             layout="vertical"
             onFinish={handleOrderSubmit}
             initialValues={{
-              orderType: "DINE_IN",
+              orderType: ORDER_TYPES.DINE_IN,
             }}
           >
             {/* Display selected items */}
@@ -1347,9 +1443,9 @@ const MenuView = () => {
               ]}
             >
               <Radio.Group>
-                <Radio.Button value="DINE_IN">Ăn tại chỗ</Radio.Button>
-                <Radio.Button value="TAKEOUT">Mang đi</Radio.Button>
-                <Radio.Button value="DELIVERY">Giao hàng</Radio.Button>
+                <Radio.Button value={ORDER_TYPES.DINE_IN}>Ăn tại chỗ</Radio.Button>
+                <Radio.Button value={ORDER_TYPES.TAKEAWAY}>Mang đi</Radio.Button>
+                <Radio.Button value={ORDER_TYPES.DELIVERY}>Giao hàng</Radio.Button>
               </Radio.Group>
             </Form.Item>
 
@@ -1360,7 +1456,7 @@ const MenuView = () => {
               }
             >
               {({ getFieldValue }) =>
-                getFieldValue("orderType") === "DELIVERY" ? (
+                getFieldValue("orderType") === ORDER_TYPES.DELIVERY ? (
                   <Form.Item
                     name="deliveryAddress"
                     label="Địa chỉ giao hàng"
@@ -1376,7 +1472,7 @@ const MenuView = () => {
                       placeholder="Nhập địa chỉ giao hàng"
                     />
                   </Form.Item>
-                ) : getFieldValue("orderType") === "DINE_IN" ? (
+                ) : getFieldValue("orderType") === ORDER_TYPES.DINE_IN ? (
                   <Form.Item
                     name="tableNumber"
                     label="Số bàn"
@@ -1403,6 +1499,26 @@ const MenuView = () => {
                 rows={3}
                 placeholder="Ghi chú thêm cho món ăn..."
               />
+            </Form.Item>
+
+            <Form.Item
+              name="paymentMethod"
+              label="Phương thức thanh toán"
+              initialValue={PAYMENT_METHODS.CASH}
+            >
+              <Radio.Group style={{ width: "100%" }}>
+                <Space direction="vertical" style={{ width: "100%" }}>
+                  <Radio value={PAYMENT_METHODS.CASH} style={{ border: "1px solid #d9d9d9", padding: "10px", borderRadius: "8px", width: "100%" }}>
+                    <Space>💵 Tiền mặt</Space>
+                  </Radio>
+                  <Radio value={PAYMENT_METHODS.VIETQR} style={{ border: "1px solid #d9d9d9", padding: "10px", borderRadius: "8px", width: "100%" }}>
+                    <Space>📱 VietQR (Quét mã)</Space>
+                  </Radio>
+                  <Radio value={PAYMENT_METHODS.PAYPAL} style={{ border: "1px solid #d9d9d9", padding: "10px", borderRadius: "8px", width: "100%" }}>
+                    <Space>🅿️ PayPal</Space>
+                  </Radio>
+                </Space>
+              </Radio.Group>
             </Form.Item>
 
             <Form.Item
@@ -1531,6 +1647,62 @@ const MenuView = () => {
             </Form.Item>
           </Form>
         </Modal>
+
+        {/* Payment QR Modal */}
+        <Modal
+          title={<Title level={4}>Thanh toán VietQR</Title>}
+          open={paymentModalVisible}
+          onCancel={() => setPaymentModalVisible(false)}
+          footer={[
+            <Button key="close" onClick={() => setPaymentModalVisible(false)}>
+              Đóng
+            </Button>
+          ]}
+          width={400}
+          centered
+        >
+          <div style={{ textAlign: "center", padding: "20px" }}>
+            <p style={{ marginBottom: "16px", fontSize: "16px" }}>Vui lòng quét mã QR để thanh toán</p>
+            {qrCodeUrl ? (
+              <Image
+                src={qrCodeUrl}
+                alt="VietQR Code"
+                width={250}
+                style={{ border: "1px solid #d9d9d9", borderRadius: "8px" }}
+              />
+            ) : (
+              <Empty description="Không có mã QR" />
+            )}
+            <p style={{ marginTop: "16px", color: "#8c8c8c" }}>
+              Chờ xác nhận thanh toán...
+            </p>
+
+            <Divider dashed />
+
+            <Button
+              type="primary"
+              size="large"
+              block
+              onClick={() => {
+                antMessage.loading("Đang xác nhận thanh toán...", 1);
+                paymentAPI.completePayment(currentPaymentId).then(() => {
+                  antMessage.success("Đã xác nhận thanh toán thành công!");
+                  setPaymentModalVisible(false);
+                  setQrCodeUrl("");
+                  setCurrentPaymentId(null);
+                  // Reload data if needed
+                }).catch(err => {
+                  console.error("Complete payment error:", err);
+                  antMessage.error("Không thể xác nhận thanh toán. Vui lòng thử lại.");
+                });
+              }}
+              style={{ marginTop: '10px', height: '50px', fontSize: '18px' }}
+            >
+              Xác nhận đã thanh toán
+            </Button>
+          </div>
+        </Modal>
+
       </div>
 
       {/* Fixed Order Button - Always visible at bottom right of viewport */}

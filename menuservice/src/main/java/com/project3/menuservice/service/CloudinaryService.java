@@ -24,10 +24,6 @@ public class CloudinaryService {
     @Value("${cloudinary.cloud-name}")
     private String cloudName;
 
-    /**
-     * Generate signature for frontend upload
-     * @param folder - Cloudinary folder (default: "restaurant-menu")
-     */
     public Map<String, String> generateSignature(String folder) {
         if (folder == null || folder.isEmpty()) {
             folder = "restaurant-menu";
@@ -43,28 +39,16 @@ public class CloudinaryService {
         return result;
     }
 
-    /**
-     * Generate signature for frontend upload (default folder)
-     */
     public Map<String, String> generateSignature() {
         return generateSignature("restaurant-menu");
     }
 
-    /**
-     * Generate signature for specific timestamp and folder
-     * Parameters must be sorted alphabetically for Cloudinary signature
-     */
     private String generateSignature(long timestamp, String folder) {
-        // For upload, we need to include all parameters in signature
-        // Parameters must be sorted alphabetically: folder comes before timestamp
         String toSign = "folder=" + folder + "&timestamp=" + timestamp + apiSecret;
         String signature = org.apache.commons.codec.digest.DigestUtils.sha1Hex(toSign);
         return signature;
     }
 
-    /**
-     * Delete image from Cloudinary using REST API
-     */
     public boolean deleteImage(String publicId) {
         try {
             if (publicId == null || publicId.isEmpty()) return true;

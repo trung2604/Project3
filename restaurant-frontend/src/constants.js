@@ -78,6 +78,16 @@ export const API_ENDPOINTS = {
     PROMOTIONS: "/api/loyalty/promotions",
     PROMOTION_BY_ID: (id) => `/api/loyalty/promotions/${id}`,
   },
+  // Payment Service
+  PAYMENT: {
+    BASE: "/api/payments",
+    BY_ID: (id) => `/api/payments/${id}`,
+    BY_ORDER: (orderId) => `/api/payments/order/${orderId}`,
+    BY_CUSTOMER: (customerId) => `/api/payments/customer/${customerId}`,
+    CREATE: "/api/payments/create",
+    PROCESS: (id) => `/api/payments/${id}/process`,
+    REFUND: (id) => `/api/payments/${id}/refund`,
+  },
 };
 
 // Common Constants
@@ -126,6 +136,30 @@ export const ORDER_STATUS = {
   COMPLETED: "COMPLETED",
   CANCELLED: "CANCELLED",
 };
+
+// Payment Status
+export const PAYMENT_STATUS = {
+  PENDING: "PENDING",
+  SUCCESS: "SUCCESS",
+  FAILED: "FAILED",
+  REFUNDED: "REFUNDED",
+  PARTIALLY_REFUNDED: "PARTIALLY_REFUNDED",
+};
+
+// Payment Methods
+export const PAYMENT_METHODS = {
+  CASH: "CASH",
+  VIETQR: "VIETQR",
+  PAYPAL: "PAYPAL",
+};
+
+// Payment polling configuration
+export const PAYMENT_POLLING = {
+  INTERVAL: 5000, // 5 seconds
+  MAX_ATTEMPTS: 60, // 5 minutes max (60 * 5s = 300s)
+  TIMEOUT: 300000, // 5 minutes in milliseconds
+};
+
 
 // Loyalty Constants
 export const VOUCHER_STATUS = {

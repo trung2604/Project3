@@ -1,10 +1,12 @@
 package com.project3.orderservice.command.event;
 
+import com.project3.orderservice.command.commands.UpdateOrderStatusCommand;
 import com.project3.orderservice.command.constants.OrderConstants;
 import com.project3.orderservice.command.entity.Order;
 import com.project3.orderservice.command.entity.OrderItem;
 import com.project3.orderservice.command.entity.OrderItemRepository;
 import com.project3.orderservice.command.entity.OrderRespository;
+import com.project3.orderservice.command.enums.OrderStatus;
 import com.project3.orderservice.command.service.IngredientExtractionService;
 import com.project3.orderservice.command.service.OrderEventPublisher;
 import com.project3.orderservice.command.service.OrderMapper;
@@ -39,30 +41,42 @@ public class OrderEventHandler {
     @Autowired
     private IngredientExtractionService ingredientExtractionService;
 
+    @Autowired
+    private org.axonframework.commandhandling.gateway.CommandGateway commandGateway;
+
     @EventHandler
     public void on(CreateOrderEvent event) {
+        log.info("Received CreateOrderEvent for order: {}", event.getOrderId());
+        log.debug("Event payload: {}", event);
+
         if (orderRepository.existsById(event.getOrderId())) {
-            log.warn("Order {} already exists", event.getOrderId());
+            log.warn("Order {} already exists in Read Model - Skipping save", event.getOrderId());
             return;
         }
 
-        // Map event to entity
-        Order order = orderMapper.toEntity(event);
-        orderRepository.save(order);
+        try {
+            // Map event to entity
+            Order order = orderMapper.toEntity(event);
+            orderRepository.save(order);
 
-        // Save order items
-        List<OrderItem> orderItems = orderMapper.toOrderItemEntities(event.getOrderId(), event.getOrderItems());
-        if (!orderItems.isEmpty()) {
-            orderItemRepository.saveAll(orderItems);
+            // Save order items
+            List<OrderItem> orderItems = orderMapper.toOrderItemEntities(event.getOrderId(), event.getOrderItems());
+            if (!orderItems.isEmpty()) {
+                orderItemRepository.saveAll(orderItems);
+            }
+
+            log.info("Order {} created and saved to Read DB successfully", event.getOrderId());
+            
+            // Publish payment request event
+            eventPublisher.publishPaymentRequest(order);
+            
+            // Publish order created event for notifications
+            eventPublisher.publishOrderCreated(order);
+            
+        } catch (Exception e) {
+            log.error("Failed to handle CreateOrderEvent for order {}: {}", event.getOrderId(), e.getMessage(), e);
+            throw e; // Rethrow to ensure transaction rolls back and Axon retries
         }
-
-        log.info("Order {} created successfully", event.getOrderId());
-        
-        // Publish payment request event
-        eventPublisher.publishPaymentRequest(order);
-        
-        // Publish order created event for notifications
-        eventPublisher.publishOrderCreated(order);
     }
 
     @EventHandler
@@ -92,6 +106,9 @@ public class OrderEventHandler {
         if (OrderConstants.STATUS_COMPLETED.equals(event.getNewStatus().name())) {
             String completedAt = event.getUpdatedAt() != null ? event.getUpdatedAt().toString() : null;
             eventPublisher.publishOrderCompleted(order, completedAt);
+        } else if (com.project3.orderservice.command.enums.OrderStatus.READY.equals(event.getNewStatus())) {
+             // CKECK AUTO-COMPLETE: If READY and PAID/SUCCESS -> COMPLETED
+             checkAndAutoCompleteOrder(order);
         }
         
         // Publish delivery request if needed using entity method
@@ -155,6 +172,57 @@ public class OrderEventHandler {
             log.info("Inventory deduction requests sent via Kafka for order {}", event.getOrderId());
         } catch (Exception e) {
             log.error("Failed to send inventory deduction requests for order {}: {}", event.getOrderId(), e.getMessage(), e);
+        }
+    }
+
+    @EventHandler
+    public void on(OrderPaymentUpdatedEvent event) {
+        log.info("Handling OrderPaymentUpdatedEvent for order {}", event.getOrderId());
+        Order order = orderRepository.findById(event.getOrderId()).orElse(null);
+        if (order != null) {
+            order.setPaymentId(event.getPaymentId());
+            order.setPaymentStatus(event.getPaymentStatus());
+            orderRepository.save(order);
+            log.info("Updated order {} with paymentId {} and status {}", 
+                event.getOrderId(), event.getPaymentId(), event.getPaymentStatus());
+            
+            // CHECK AUTO-COMPLETE
+            checkAndAutoCompleteOrder(order);
+
+        } else {
+            log.warn("Order {} not found for payment update", event.getOrderId());
+        }
+    }
+    
+    @EventHandler
+    public void on(OrderPaymentStatusUpdatedEvent event) {
+        log.info("Handling OrderPaymentStatusUpdatedEvent for order {}", event.getOrderId());
+        Order order = orderRepository.findById(event.getOrderId()).orElse(null);
+        if (order != null) {
+            order.setPaymentStatus(event.getPaymentStatus());
+            orderRepository.save(order);
+            log.info("Updated order {} payment status to {}", event.getOrderId(), event.getPaymentStatus());
+
+            // CHECK AUTO-COMPLETE
+            checkAndAutoCompleteOrder(order);
+
+        } else {
+            log.warn("Order {} not found for payment status update", event.getOrderId());
+        }
+    }
+
+    private void checkAndAutoCompleteOrder(Order order) {
+        boolean isReady = OrderStatus.READY.equals(order.getOrderStatus());
+        boolean isPaid = "PAID".equalsIgnoreCase(order.getPaymentStatus()) || "SUCCESS".equalsIgnoreCase(order.getPaymentStatus());
+
+        if (isReady && isPaid) {
+            log.info("Auto-completing order {} as it is READY and PAID", order.getOrderId());
+            commandGateway.send(new UpdateOrderStatusCommand(
+                order.getOrderId(),
+                OrderStatus.COMPLETED,
+                "System (Auto-Complete)",
+                "Auto-completed (Ready + Paid)"
+            ));
         }
     }
 }

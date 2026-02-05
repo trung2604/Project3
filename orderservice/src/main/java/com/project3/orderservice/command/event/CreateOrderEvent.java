@@ -35,4 +35,5 @@ public class CreateOrderEvent {
     private String tableNumber;
     private String notes;
     private String createdBy;
+    private String paymentMethod;
 }

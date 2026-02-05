@@ -42,15 +42,23 @@ public class OrderProjection {
         } else if (query.getStartDate() != null && query.getEndDate() != null) {
             orders = orderRepository.findByOrderDateBetween(query.getStartDate(), query.getEndDate());
             log.info("Query: findByOrderDateBetween - found {} orders", orders.size());
-        } else if (query.getStatus() != null) {
-            orders = orderRepository.findByOrderStatus(query.getStatus());
-            log.info("Query: findByOrderStatus - found {} orders", orders.size());
-        } else if (query.getType() != null) {
-            orders = orderRepository.findByOrderType(query.getType());
-            log.info("Query: findByOrderType - found {} orders", orders.size());
+        } else if (query.getCustomerId() != null && query.getStatus() != null) {
+            orders = orderRepository.findByCustomerIdAndOrderStatus(query.getCustomerId(), query.getStatus());
+            log.info("Query: findByCustomerIdAndOrderStatus ({} + {}) - found {} orders", 
+                    query.getCustomerId(), query.getStatus(), orders.size());
+        } else if (query.getCustomerId() != null && query.getType() != null) {
+            orders = orderRepository.findByCustomerIdAndOrderType(query.getCustomerId(), query.getType());
+            log.info("Query: findByCustomerIdAndOrderType ({} + {}) - found {} orders", 
+                    query.getCustomerId(), query.getType(), orders.size());
         } else if (query.getCustomerId() != null) {
             orders = orderRepository.findByCustomerId(query.getCustomerId());
-            log.info("Query: findByCustomerId - found {} orders", orders.size());
+            log.info("Query: findByCustomerId ({}) - found {} orders", query.getCustomerId(), orders.size());
+        } else if (query.getStatus() != null) {
+            orders = orderRepository.findByOrderStatus(query.getStatus());
+            log.info("Query: findByOrderStatus ({}) - found {} orders", query.getStatus(), orders.size());
+        } else if (query.getType() != null) {
+            orders = orderRepository.findByOrderType(query.getType());
+            log.info("Query: findByOrderType ({}) - found {} orders", query.getType(), orders.size());
         } else {
             orders = orderRepository.findAll();
             log.info("Query: findAll - found {} orders", orders.size());
@@ -74,6 +82,9 @@ public class OrderProjection {
     private OrderResponse mapToOrderResponse(Order order) {
         OrderResponse response = new OrderResponse();
         response.setOrderId(order.getOrderId());
+        response.setPaymentId(order.getPaymentId());
+        response.setPaymentStatus(order.getPaymentStatus());
+        response.setPaymentMethod(order.getPaymentMethod());
         response.setCustomerId(order.getCustomerId());
         response.setCustomerName(order.getCustomerName());
         response.setCustomerPhone(order.getCustomerPhone());

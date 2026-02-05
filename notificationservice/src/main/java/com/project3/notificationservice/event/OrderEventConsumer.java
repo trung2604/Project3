@@ -77,8 +77,8 @@ public class OrderEventConsumer {
                 log.info("Created order created notification for customer {}", customerId);
             }
             
-            // Notify kitchen staff about new order (if DINE_IN or DELIVERY)
-            if ("DINE_IN".equals(orderType) || "DELIVERY".equals(orderType)) {
+            // Notify kitchen staff about new order (if DINE_IN, DELIVERY or TAKEAWAY)
+            if ("DINE_IN".equals(orderType) || "DELIVERY".equals(orderType) || "TAKEAWAY".equals(orderType)) {
                 List<String> kitchenStaffIds = userServiceClient.getUserIdsByRole("KITCHEN_STAFF");
                 
                 String kitchenTitle = "Đơn hàng mới cần chế biến";
@@ -97,6 +97,35 @@ public class OrderEventConsumer {
                     );
                 }
                 log.info("Notified {} kitchen staff about new order {}", kitchenStaffIds.size(), orderId);
+            }
+            
+            // Notify Restaurant Manager and Staff (Waiters) for ALL new orders
+            try {
+                java.util.List<String> managerIds = userServiceClient.getUserIdsByRole("RESTAURANT_MANAGER");
+                java.util.List<String> staffIds = userServiceClient.getUserIdsByRole("STAFF");
+                
+                java.util.Set<String> recipients = new java.util.HashSet<>();
+                if (managerIds != null) recipients.addAll(managerIds);
+                if (staffIds != null) recipients.addAll(staffIds);
+                
+                String staffTitle = "Đơn hàng mới đã được tạo";
+                String staffMessage = String.format(
+                    "Đơn hàng mới #%s. Loại: %s. Tổng tiền: %,.0f VNĐ", 
+                    orderId, orderType, totalAmount != null ? totalAmount : 0);
+                
+                for (String userId : recipients) {
+                     notificationService.createNotification(
+                        userId,
+                        "ORDER_UPDATE",
+                        staffTitle,
+                        staffMessage,
+                        "MEDIUM", 
+                        metadataJson
+                    );
+                }
+                log.info("Notified {} managers and staff about new order {}", recipients.size(), orderId);
+            } catch (Exception ex) {
+                log.error("Error notifying managers/staff: {}", ex.getMessage());
             }
             
         } catch (Exception e) {

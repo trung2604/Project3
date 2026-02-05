@@ -5,6 +5,7 @@ import com.project3.orderservice.command.dto.OrderItemDTO;
 import com.project3.orderservice.command.enums.OrderStatus;
 import com.project3.orderservice.command.enums.OrderType;
 import com.project3.orderservice.command.event.*;
+import com.project3.orderservice.command.event.OrderPaymentUpdatedEvent;
 import com.project3.orderservice.command.util.OrderCalculator;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -28,6 +29,9 @@ public class OrderAggregate {
     private String orderId;
     
     private String customerId;
+    private String paymentId;
+    private String paymentStatus;
+    private String paymentMethod;
     private String customerName;
     private String customerPhone;
     private OrderType orderType;
@@ -93,6 +97,7 @@ public class OrderAggregate {
         event.setTableNumber(command.getTableNumber());
         event.setNotes(command.getNotes());
         event.setCreatedBy(command.getCreatedBy());
+        event.setPaymentMethod(command.getPaymentMethod());
         
         apply(event);
     }
@@ -103,6 +108,9 @@ public class OrderAggregate {
             throw new IllegalStateException("Cannot update status of a cancelled order");
         }
         if (this.orderStatus == OrderStatus.COMPLETED) {
+            if (command.getNewStatus() == OrderStatus.COMPLETED) {
+                return; // Idempotent: Already completed, ignore.
+            }
             throw new IllegalStateException("Cannot update status of a completed order");
         }
         
@@ -136,6 +144,20 @@ public class OrderAggregate {
         
         if (command.getNewStatus() == OrderStatus.COOKING) {
             requestInventoryDeduction();
+        }
+        
+        // Auto-completion logic: If transitioning to READY/DELIVERING and payment is already SUCCESS
+        if ("SUCCESS".equals(this.paymentStatus) && 
+           (command.getNewStatus() == OrderStatus.READY || command.getNewStatus() == OrderStatus.DELIVERING)) {
+            
+             OrderStatusUpdatedEvent completeEvent = new OrderStatusUpdatedEvent();
+             completeEvent.setOrderId(command.getOrderId());
+             completeEvent.setPreviousStatus(command.getNewStatus());
+             completeEvent.setNewStatus(OrderStatus.COMPLETED);
+             completeEvent.setUpdatedAt(LocalDateTime.now());
+             completeEvent.setUpdatedBy("System (Auto-complete)");
+             completeEvent.setNotes("Auto-completed (Ready + Paid)");
+             apply(completeEvent);
         }
     }
 
@@ -202,6 +224,7 @@ public class OrderAggregate {
         this.tableNumber = event.getTableNumber();
         this.notes = event.getNotes();
         this.createdBy = event.getCreatedBy();
+        this.paymentMethod = event.getPaymentMethod();
     }
 
     @EventSourcingHandler
@@ -226,6 +249,58 @@ public class OrderAggregate {
     @EventSourcingHandler
     public void on(BillSplitEvent event) {
     }
+    
+    @CommandHandler
+    public void handle(UpdateOrderPaymentCommand command) {
+        if (this.orderStatus == OrderStatus.CANCELLED) {
+            throw new IllegalStateException("Cannot update payment for cancelled order");
+        }
+        
+        OrderPaymentUpdatedEvent event = OrderPaymentUpdatedEvent.builder()
+            .orderId(command.getOrderId())
+            .paymentId(command.getPaymentId())
+            .paymentStatus(command.getPaymentStatus())
+            .build();
+            
+        apply(event);
+    }
+    
+    @EventSourcingHandler
+    public void on(OrderPaymentUpdatedEvent event) {
+        this.paymentId = event.getPaymentId();
+        this.paymentStatus = event.getPaymentStatus();
+    }
+    
+    @CommandHandler
+    public void handle(UpdateOrderPaymentStatusCommand command) {
+        OrderPaymentStatusUpdatedEvent event = OrderPaymentStatusUpdatedEvent.builder()
+            .orderId(command.getOrderId())
+            .paymentStatus(command.getPaymentStatus())
+            .build();
+        apply(event);
+        
+        // Auto-transition logic within Aggregate (Consistent State)
+        if ("SUCCESS".equals(command.getPaymentStatus())) {
+             if (this.orderStatus == OrderStatus.READY || this.orderStatus == OrderStatus.DELIVERING) {
+                  // Trigger completion
+                  OrderStatusUpdatedEvent completeEvent = new OrderStatusUpdatedEvent();
+                  completeEvent.setOrderId(command.getOrderId());
+                  completeEvent.setPreviousStatus(this.orderStatus);
+                  completeEvent.setNewStatus(OrderStatus.COMPLETED);
+                  completeEvent.setUpdatedAt(LocalDateTime.now());
+                  completeEvent.setUpdatedBy("System (Payment Success)");
+                  completeEvent.setNotes("Auto-completed after successful payment");
+                  apply(completeEvent);
+             }
+             // Logic to set status to PAID is removed as per requirement.
+             // OrderStatus remains PENDING even if payment is successful.
+        }
+    }
+    
+    @EventSourcingHandler
+    public void on(OrderPaymentStatusUpdatedEvent event) {
+        this.paymentStatus = event.getPaymentStatus();
+    }
 
     private boolean isValidStatusTransition(OrderStatus current, OrderStatus newStatus) {
         if (current == null) return false;
@@ -233,7 +308,7 @@ public class OrderAggregate {
         return switch (current) {
             case PENDING -> newStatus == OrderStatus.COOKING || newStatus == OrderStatus.CANCELLED;
             case COOKING -> newStatus == OrderStatus.READY || newStatus == OrderStatus.CANCELLED;
-            case READY -> newStatus == OrderStatus.DELIVERING || newStatus == OrderStatus.CANCELLED;
+            case READY -> newStatus == OrderStatus.DELIVERING || newStatus == OrderStatus.COMPLETED || newStatus == OrderStatus.CANCELLED;
             case DELIVERING -> newStatus == OrderStatus.COMPLETED;
             case COMPLETED, CANCELLED -> false;
         };

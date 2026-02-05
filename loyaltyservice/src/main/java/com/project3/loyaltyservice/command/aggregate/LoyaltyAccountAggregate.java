@@ -1,6 +1,7 @@
 package com.project3.loyaltyservice.command.aggregate;
 
 import com.project3.loyaltyservice.command.commands.CreateLoyaltyAccountCommand;
+import com.project3.loyaltyservice.command.commands.DeductPointsCommand;
 import com.project3.loyaltyservice.command.commands.EarnPointsCommand;
 import com.project3.loyaltyservice.command.commands.RedeemVoucherCommand;
 import com.project3.loyaltyservice.command.events.LoyaltyAccountCreatedEvent;
@@ -86,6 +87,31 @@ public class LoyaltyAccountAggregate {
     public void on(PointsEarnedEvent event) {
         this.currentPoints = event.getPointsAfter();
         this.totalPointsEarned += event.getPoints();
+    }
+    
+    @CommandHandler
+    public void handle(DeductPointsCommand command) {
+        if (command.getPoints() == null || command.getPoints() <= 0) {
+            throw new IllegalArgumentException("Points to deduct must be greater than 0");
+        }
+        
+        Long pointsBefore = this.currentPoints;
+        Long pointsToDeduct = Math.min(command.getPoints(), this.currentPoints); // Don't go negative
+        Long pointsAfter = pointsBefore - pointsToDeduct;
+        
+        if (pointsToDeduct > 0) {
+            PointsEarnedEvent event = new PointsEarnedEvent();
+            event.setAccountId(this.accountId);
+            event.setUserId(command.getUserId());
+            event.setPoints(-pointsToDeduct); // Negative for deduction
+            event.setPointsBefore(pointsBefore);
+            event.setPointsAfter(pointsAfter);
+            event.setOrderId(command.getOrderId());
+            event.setDescription(command.getReason());
+            event.setEarnedAt(LocalDateTime.now());
+            
+            apply(event);
+        }
     }
     
     @CommandHandler

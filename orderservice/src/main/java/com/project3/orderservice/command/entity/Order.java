@@ -22,6 +22,12 @@ public class Order {
 
     private String customerId;
     
+    private String paymentId;
+    
+    private String paymentStatus;
+    
+    private String paymentMethod;
+    
     private String customerName;
     
     private String customerPhone;

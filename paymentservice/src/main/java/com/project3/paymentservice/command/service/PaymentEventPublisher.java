@@ -20,6 +20,29 @@ public class PaymentEventPublisher {
     @Autowired
     private ObjectMapper objectMapper;
     
+    public void publishPaymentCreated(Payment payment) {
+        try {
+            Map<String, Object> event = new HashMap<>();
+            event.put("paymentId", payment.getPaymentId());
+            event.put("orderId", payment.getOrderId());
+            event.put("customerId", payment.getCustomerId());
+            event.put("amount", payment.getAmount());
+            event.put("paymentMethod", payment.getPaymentMethod().toString());
+            event.put("status", "PENDING"); // Initial status
+            event.put("createdAt", payment.getCreatedAt() != null ? payment.getCreatedAt().toString() : null);
+            event.put("timestamp", System.currentTimeMillis());
+            
+            String message = objectMapper.writeValueAsString(event);
+            
+            // Publish to OrderService
+            kafkaService.sendMessage("payment-created", message);
+            log.info("Published payment-created event to Kafka for orderId: {}", payment.getOrderId());
+            
+        } catch (Exception e) {
+            log.error("Error publishing payment created event: {}", e.getMessage(), e);
+        }
+    }
+    
     public void publishPaymentCompleted(Payment payment) {
         try {
             Map<String, Object> event = new HashMap<>();

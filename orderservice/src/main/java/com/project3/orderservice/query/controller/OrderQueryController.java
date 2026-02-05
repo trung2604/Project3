@@ -105,6 +105,8 @@ public class OrderQueryController {
                         .filter(order -> order.getCustomerId() != null && order.getCustomerId().equals(currentUserId))
                         .collect(Collectors.toList());
                 log.info("Filtered orders for customer {}: {} -> {}", currentUserId, beforeFilter, orders.size());
+            } else {
+                log.info("Staff user {} viewing all {} orders", currentUserId, orders.size());
             }
             
             log.info("Returning {} orders to user {}", orders.size(), currentUserId);

@@ -15,6 +15,9 @@ import java.util.List;
 @NoArgsConstructor
 public class OrderResponse {
     private String orderId;
+    private String paymentId;
+    private String paymentStatus;
+    private String paymentMethod;
     private String customerId;
     private String customerName;
     private String customerPhone;
